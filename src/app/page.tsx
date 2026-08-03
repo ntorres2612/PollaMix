@@ -1,45 +1,31 @@
-import Button from "@/components/ui/Button";
-import Card from "@/components/ui/Card";
-import Container from "@/components/ui/Container";
-import SectionTitle from "@/components/ui/SectionTitle";
-import Badge from "@/components/ui/Badge";
-
+import Navbar from "@/components/layout/Navbar";
+import Image from "next/image";
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#071321] py-20">
+    <main className="min-h-screen bg-[#071321]">
 
-      <Container>
+      <Navbar />
 
-        <SectionTitle
-          title="Polla Mix"
-          subtitle="Biblioteca de Componentes"
-        />
+      <section className="pt-40 text-center">
 
-        <div className="flex justify-center mb-8">
-          <Badge text="Sprint 1.3" />
-        </div>
+        <h1 className="text-6xl font-black">
+          Bienvenido a
+        </h1>
 
-        <Card>
+        <h2 className="text-7xl font-black text-red-600 mt-3">
+          <Image
+            src="/ChatGPT Image 29 jul 2026, 07_27_04 p.m..png"
+            alt="Polla Mix"
+            width={180}
+            height={60}
+          />
+        </h2>
 
-          <p className="mb-6">
-            Este Card será reutilizado en todo el proyecto.
-          </p>
+        <p className="mt-8 text-slate-400 text-xl">
+          La mejor plataforma para pronósticos deportivos.
+        </p>
 
-          <div className="flex gap-4">
-
-            <Button>
-              Participar
-            </Button>
-
-            <Button variant="secondary">
-              Ver Premios
-            </Button>
-
-          </div>
-
-        </Card>
-
-      </Container>
+      </section>
 
     </main>
   );
