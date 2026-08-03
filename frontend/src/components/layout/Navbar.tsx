@@ -1,67 +1,51 @@
-import Button from "@/components/ui/Button";
-import Container from "@/components/ui/Container";
-
 export default function Navbar() {
+
   return (
-    <nav
-      className="
-        fixed
-        top-0
-        left-0
-        right-0
-        z-50
-        bg-[#071321]/90
-        backdrop-blur-md
-        border-b
-        border-white/10
-      "
-    >
-      <Container>
 
-        <div className="flex h-20 items-center justify-between">
+<nav className="hidden md:flex items-center gap-8">
 
-          {/* Logo */}
+<a
+href="#"
+className="hover:text-red-500 transition"
+>
+Inicio
+</a>
 
-          <h1 className="text-3xl font-black tracking-wide">
-            POLLA{" "}
-            <span className="text-red-600">
-              MIX
-            </span>
-          </h1>
+<a
+href="#"
+className="hover:text-red-500 transition"
+>
+Jornadas
+</a>
 
-          {/* Menú */}
+<a
+href="#"
+className="hover:text-red-500 transition"
+>
+Clasificación
+</a>
 
-          <ul className="hidden md:flex items-center gap-10">
+<a
+href="#"
+className="hover:text-red-500 transition"
+>
+Premios
+</a>
 
-            <li className="hover:text-red-500 cursor-pointer transition">
-              Inicio
-            </li>
+<button
+className="px-5 py-2 rounded-xl border border-red-600 hover:bg-red-600 transition"
+>
+Ingresar
+</button>
 
-            <li className="hover:text-red-500 cursor-pointer transition">
-              Cómo funciona
-            </li>
+<button
+className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 transition"
+>
+Registrarse
+</button>
 
-            <li className="hover:text-red-500 cursor-pointer transition">
-              Partidos
-            </li>
+</nav>
 
-            <li className="hover:text-red-500 cursor-pointer transition">
-              Premios
-            </li>
-
-            <li className="hover:text-red-500 cursor-pointer transition">
-              Contacto
-            </li>
-
-          </ul>
-
-          <Button>
-            Participar
-          </Button>
-
-        </div>
-
-      </Container>
-    </nav>
   );
+
 }

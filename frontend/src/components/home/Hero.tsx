@@ -8,7 +8,7 @@ import HeroStat from "./HeroStats";
 
 export default function Hero() {
     return (
-        <section className="relative overflow-hidden pt-36 pb-24" style={{
+        <section className="pt-24 min-h-screen flex items-center" style={{
             backgroundImage: "url('/images/stadium.png')",
             backgroundSize: "cover",
             backgroundPosition: "center",
