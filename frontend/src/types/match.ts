@@ -3,6 +3,8 @@ export interface Match {
   week: number;
   home: string;
   away: string;
+  homeLogo: string;
+  awayLogo: string;
   date: string;
   time: string;
 }

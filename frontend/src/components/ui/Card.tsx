@@ -1,23 +1,24 @@
 interface CardProps {
-  children: React.ReactNode;
+    children: React.ReactNode;
 }
 
 export default function Card({ children }: CardProps) {
-  return (
-    <div
-      className="
-      bg-slate-900
-      rounded-2xl
-      border
-      border-slate-800
-      p-6
-      shadow-xl
-      hover:border-red-600
-      transition
-      duration-300
-    "
-    >
-      {children}
-    </div>
-  );
+    return (
+        <div
+            className="
+            bg-white/5
+            backdrop-blur-md
+            border
+            border-white/10
+            rounded-3xl
+            shadow-xl
+            hover:scale-[1.02]
+            hover:border-red-500
+            transition-all
+            duration-300
+            "
+        >
+            {children}
+        </div>
+    );
 }

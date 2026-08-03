@@ -1,36 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { usePredictionContext } from "@/context/PredictionContext";
 
-export default function MatchSelector() {
-    const [selected, setSelected] = useState("");
+interface MatchSelectorProps {
+  matchId: number;
+}
 
-    const options = [
-        "Local",
-        "Empate",
-        "Visitante",
-    ];
+export default function MatchSelector({
+  matchId,
+}: MatchSelectorProps) {
+  const { predictions, setPrediction } = usePredictionContext();
 
-    return (
-        <div className="flex gap-3 mt-5">
+  const options = [
+    "Local",
+    "Empate",
+    "Visitante",
+  ];
 
-            {options.map((option) => (
+  return (
+    <div className="flex flex-wrap gap-3 mt-5">
 
-                <button
-                    key={option}
-                    onClick={() => setSelected(option)}
-                    className={`px-5 py-2 rounded-xl font-semibold transition-all duration-300
+      {options.map((option) => (
 
-          ${selected === option
-                            ? "bg-red-600 text-white"
-                            : "bg-slate-800 hover:bg-slate-700"
-                        }`}
-                >
-                    {option}
-                </button>
+        <button
+          key={option}
+          onClick={() => setPrediction(matchId, option)}
+          className={`
+            px-5
+            py-2
+            rounded-xl
+            font-semibold
+            transition-all
+            duration-300
+            hover:scale-105
 
-            ))}
+            ${
+              predictions[matchId] === option
+                ? "bg-red-600 text-white shadow-lg shadow-red-600/40"
+                : "bg-slate-800 text-white hover:bg-slate-700"
+            }
+          `}
+        >
+          {option}
+        </button>
 
-        </div>
-    );
+      ))}
+
+    </div>
+  );
 }
