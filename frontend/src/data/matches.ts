@@ -1,4 +1,6 @@
-export const matches = [
+import { Match } from "@/types/match";
+
+export const matches: Match[] = [
   {
     id: 1,
     week: 1,
@@ -21,14 +23,14 @@ export const matches = [
     home: "Cruz Azul",
     away: "Pumas",
     date: "27 Mayo",
-    time: "6:00 PM",
+    time: "5:00 PM",
   },
   {
     id: 4,
     week: 2,
-    home: "León",
-    away: "Toluca",
-    date: "2 Junio",
-    time: "7:00 PM",
+    home: "Toluca",
+    away: "León",
+    date: "02 Junio",
+    time: "8:00 PM",
   },
 ];
