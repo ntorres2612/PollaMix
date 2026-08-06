@@ -3,20 +3,26 @@ import {
   Min,
 } from 'class-validator';
 
+import { ApiProperty } from '@nestjs/swagger';
+
 export class CreatePredictionDto {
 
   @IsInt()
   userId!: number;
 
-  @IsInt()
+  @ApiProperty({
+    example: 341,
+  })
   matchId!: number;
 
-  @IsInt()
-  @Min(0)
+  @ApiProperty({
+    example: 2,
+  })
   homeScore!: number;
 
-  @IsInt()
-  @Min(0)
+   @ApiProperty({
+    example: 1,
+  })
   awayScore!: number;
 
 }
