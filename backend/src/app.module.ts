@@ -1,13 +1,31 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { UsersModule } from './users/users.module';
+import { TeamsModule } from './teams/teams.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { MatchdaysModule } from './matchdays/matchdays.module';
+import { MatchesModule } from './matches/matches.module';
+import { PredictionsModule } from './predictions/predictions.module';
+import { FootballApiModule } from './football-api/football-api.module';
+
 
 @Module({
   imports: [
-    UsersModule,
+
+  
+
+    PrismaModule,
+
+    FootballApiModule,
+
+  
+
+    TeamsModule,
+
+    MatchdaysModule,
+
+    MatchesModule,
+
+    PredictionsModule,
+
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
