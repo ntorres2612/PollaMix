@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Delete,
+  UseGuards,
 } from '@nestjs/common';
 
 import {
@@ -13,23 +14,19 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-
 import { PredictionsService } from './predictions.service';
 import { CreatePredictionDto } from './dto/create-prediction.dto';
 import { UpdatePredictionDto } from './dto/update-prediction.dto';
 import { ScoringService } from './scoring/scoring.service';
-import { UseGuards } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-
 
 @ApiTags('Predictions')
 @ApiBearerAuth()
 @Controller('predictions')
-
 export class PredictionsController {
+
   constructor(
     private readonly predictionsService: PredictionsService,
     private readonly scoringService: ScoringService,
@@ -38,14 +35,13 @@ export class PredictionsController {
   @Post()
   @UseGuards(JwtAuthGuard)
   create(
-    @CurrentUser() user,
+    @CurrentUser() user: any,
     @Body() dto: CreatePredictionDto,
   ) {
-
-    dto.userId = user.id;
-
-    return this.predictionsService.create(dto);
-
+    return this.predictionsService.create(
+      user.id,
+      dto,
+    );
   }
 
   @Get()
@@ -54,24 +50,38 @@ export class PredictionsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.predictionsService.findOne(+id);
+  findOne(
+    @Param('id') id: string,
+  ) {
+    return this.predictionsService.findOne(
+      Number(id),
+    );
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard)
   update(
     @Param('id') id: string,
     @Body() dto: UpdatePredictionDto,
   ) {
-    return this.predictionsService.update(+id, dto);
+    return this.predictionsService.update(
+      Number(id),
+      dto,
+    );
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.predictionsService.remove(+id);
+  @UseGuards(JwtAuthGuard)
+  remove(
+    @Param('id') id: string,
+  ) {
+    return this.predictionsService.remove(
+      Number(id),
+    );
   }
 
   @Post('score/:matchId')
+  @UseGuards(JwtAuthGuard)
   scoreMatch(
     @Param('matchId') matchId: string,
   ) {
@@ -79,4 +89,6 @@ export class PredictionsController {
       Number(matchId),
     );
   }
+
+
 }

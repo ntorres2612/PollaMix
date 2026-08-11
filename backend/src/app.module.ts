@@ -12,6 +12,7 @@ import { AuthModule } from './auth/auth.module';
 import { JwtStrategy } from './auth/strategies/jwt.strategy';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { CurrentUser } from './auth/decorators/current-user.decorator';
+import { TournamentsModule } from './tournaments/tournaments.module';
 
 
 @Module({
@@ -25,6 +26,7 @@ import { CurrentUser } from './auth/decorators/current-user.decorator';
     RankingModule,
     DashboardModule,
     AuthModule,
+    TournamentsModule,
   ],
 })
 export class AppModule {}

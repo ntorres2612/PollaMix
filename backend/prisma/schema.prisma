@@ -55,15 +55,18 @@ model Tournament {
 
   maxPlayers Int
 
-  startsAt DateTime
+  registrationStartsAt DateTime
+  registrationEndsAt   DateTime
 
-  endsAt DateTime
+  startsAt DateTime
+  endsAt   DateTime
 
   active Boolean @default(true)
 
   createdAt DateTime @default(now())
 
   participants TournamentParticipant[]
+  predictions  Prediction[]
 }
 
 model TournamentParticipant {
@@ -142,13 +145,16 @@ model Prediction {
   awayScore Int
   points    Int      @default(0)
   createdAt DateTime @default(now())
-  userId    Int
-  matchId   Int
 
-  user  User  @relation(fields: [userId], references: [id])
-  match Match @relation(fields: [matchId], references: [id])
+  userId       Int
+  matchId      Int
+  tournamentId Int
 
-  @@unique([userId, matchId])
+  user       User       @relation(fields: [userId], references: [id])
+  match      Match      @relation(fields: [matchId], references: [id])
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+
+  @@unique([userId, matchId, tournamentId])
 }
 
 model Payment {
