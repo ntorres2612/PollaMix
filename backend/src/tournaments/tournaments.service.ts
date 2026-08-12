@@ -63,6 +63,18 @@ export class TournamentsService {
             );
         }
 
+        if (registrationStartsAt >= registrationEndsAt) {
+            throw new BadRequestException(
+                'La fecha de inicio de inscripción debe ser anterior a la fecha de finalización de inscripción.',
+            );
+        }
+
+        if (registrationEndsAt > startsAt) {
+            throw new BadRequestException(
+                'La inscripción debe terminar antes de que inicie el torneo.',
+            );
+        }
+
         if (dto.inscription < 0) {
             throw new BadRequestException(
                 'El valor de inscripción no puede ser negativo.',
