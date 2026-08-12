@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateTournamentDto } from './dto/create-tournament.dto';
+import { UpdateTournamentDto } from './dto/update-tournament.dto';
 
 @Injectable()
 export class TournamentsService {
@@ -25,12 +26,16 @@ export class TournamentsService {
             });
 
         if (!league) {
-
             throw new NotFoundException(
                 'La liga no existe.',
             );
-
         }
+
+        const registrationStartsAt =
+            new Date(dto.registrationStartsAt);
+
+        const registrationEndsAt =
+            new Date(dto.registrationEndsAt);
 
         const startsAt =
             new Date(dto.startsAt);
@@ -38,20 +43,36 @@ export class TournamentsService {
         const endsAt =
             new Date(dto.endsAt);
 
-        if (endsAt <= startsAt) {
-
+        if (
+            registrationEndsAt <= registrationStartsAt
+        ) {
             throw new BadRequestException(
-                'La fecha de finalización debe ser posterior a la fecha de inicio.',
+                'La fecha de finalización de inscripción debe ser posterior a la fecha de inicio de inscripción.',
             );
+        }
 
+        if (startsAt <= registrationEndsAt) {
+            throw new BadRequestException(
+                'El torneo debe comenzar después de finalizar el período de inscripción.',
+            );
+        }
+
+        if (endsAt <= startsAt) {
+            throw new BadRequestException(
+                'La fecha de finalización debe ser posterior a la fecha de inicio del torneo.',
+            );
+        }
+
+        if (dto.inscription < 0) {
+            throw new BadRequestException(
+                'El valor de inscripción no puede ser negativo.',
+            );
         }
 
         if (dto.prize < 0) {
-
             throw new BadRequestException(
                 'El premio no puede ser negativo.',
             );
-
         }
 
         return this.prisma.tournament.create({
@@ -72,6 +93,10 @@ export class TournamentsService {
 
                 maxPlayers: dto.maxPlayers,
 
+                registrationStartsAt,
+
+                registrationEndsAt,
+
                 startsAt,
 
                 endsAt,
@@ -79,14 +104,12 @@ export class TournamentsService {
             },
 
             include: {
-
                 league: true,
-
             },
 
         });
-
     }
+
     async join(
         tournamentId: number,
         userId: number,
@@ -123,20 +146,16 @@ export class TournamentsService {
 
         const now = new Date();
 
-        if (now < tournament.startsAt) {
-
+        if (now < tournament.registrationStartsAt) {
             throw new BadRequestException(
                 'La inscripción todavía no está abierta.',
             );
-
         }
 
-        if (now > tournament.endsAt) {
-
+        if (now > tournament.registrationEndsAt) {
             throw new BadRequestException(
                 'El período de inscripción ya terminó.',
             );
-
         }
 
         const user =
@@ -418,7 +437,11 @@ export class TournamentsService {
         return tournament;
     }
 
-    async update(id: number, dto: any) {
+    async update(
+        id: number,
+        dto: UpdateTournamentDto,
+    ) {
+
         const tournament =
             await this.prisma.tournament.findUnique({
                 where: {
@@ -432,11 +455,71 @@ export class TournamentsService {
             );
         }
 
+        const data: any = {
+            ...dto,
+        };
+
+        if (dto.registrationStartsAt) {
+            data.registrationStartsAt =
+                new Date(dto.registrationStartsAt);
+        }
+
+        if (dto.registrationEndsAt) {
+            data.registrationEndsAt =
+                new Date(dto.registrationEndsAt);
+        }
+
+        if (dto.startsAt) {
+            data.startsAt =
+                new Date(dto.startsAt);
+        }
+
+        if (dto.endsAt) {
+            data.endsAt =
+                new Date(dto.endsAt);
+        }
+
+        const registrationStartsAt =
+            data.registrationStartsAt ??
+            tournament.registrationStartsAt;
+
+        const registrationEndsAt =
+            data.registrationEndsAt ??
+            tournament.registrationEndsAt;
+
+        const startsAt =
+            data.startsAt ??
+            tournament.startsAt;
+
+        const endsAt =
+            data.endsAt ??
+            tournament.endsAt;
+
+        if (
+            registrationEndsAt <= registrationStartsAt
+        ) {
+            throw new BadRequestException(
+                'La fecha de finalización de inscripción debe ser posterior a la fecha de inicio de inscripción.',
+            );
+        }
+
+        if (startsAt <= registrationEndsAt) {
+            throw new BadRequestException(
+                'El torneo debe comenzar después de finalizar el período de inscripción.',
+            );
+        }
+
+        if (endsAt <= startsAt) {
+            throw new BadRequestException(
+                'La fecha de finalización debe ser posterior a la fecha de inicio del torneo.',
+            );
+        }
+
         return this.prisma.tournament.update({
             where: {
                 id,
             },
-            data: dto,
+            data,
         });
     }
 

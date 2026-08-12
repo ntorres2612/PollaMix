@@ -7,11 +7,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  PLAYER
+  ADMIN
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   name      String
   email     String   @unique
   password  String
+  role      UserRole @default(PLAYER)
   createdAt DateTime @default(now())
 
   predictions  Prediction[]
@@ -50,10 +56,8 @@ model Tournament {
   season Int
 
   inscription Float
-
-  prize Float
-
-  maxPlayers Int
+  prize       Float
+  maxPlayers  Int
 
   registrationStartsAt DateTime
   registrationEndsAt   DateTime
@@ -61,8 +65,7 @@ model Tournament {
   startsAt DateTime
   endsAt   DateTime
 
-  active Boolean @default(true)
-
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
   participants TournamentParticipant[]

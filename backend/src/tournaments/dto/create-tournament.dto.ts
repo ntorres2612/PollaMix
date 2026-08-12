@@ -35,6 +35,12 @@ export class CreateTournamentDto {
   maxPlayers!: number;
 
   @IsDateString()
+  registrationStartsAt!: string;
+
+  @IsDateString()
+  registrationEndsAt!: string;
+
+  @IsDateString()
   startsAt!: string;
 
   @IsDateString()

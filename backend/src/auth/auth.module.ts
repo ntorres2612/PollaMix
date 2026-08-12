@@ -8,6 +8,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   providers: [
     AuthService,
     JwtStrategy,
+    RolesGuard,
   ],
 
   exports: [
@@ -38,4 +40,4 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     PassportModule,
   ],
 })
-export class AuthModule {}
+export class AuthModule { }

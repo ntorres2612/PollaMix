@@ -26,11 +26,10 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 @ApiBearerAuth()
 @Controller('predictions')
 export class PredictionsController {
-
   constructor(
     private readonly predictionsService: PredictionsService,
     private readonly scoringService: ScoringService,
-  ) { }
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -89,6 +88,4 @@ export class PredictionsController {
       Number(matchId),
     );
   }
-
-
 }
