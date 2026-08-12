@@ -24,32 +24,62 @@ export class TournamentParticipantsService {
         where: {
           id: tournamentId,
         },
+        include: {
+          participants: true,
+        },
       });
 
     if (!tournament) {
       throw new NotFoundException(
-        'Torneo no encontrado.',
+        'El torneo no existe.',
       );
     }
 
-    // 2. Verificar que el torneo esté abierto
+    // 2. Verificar que el torneo esté activo
     if (!tournament.active) {
       throw new BadRequestException(
         'El torneo no está activo.',
       );
     }
 
-    // 3. Verificar fecha de inicio
-    if (
-      tournament.startsAt &&
-      tournament.startsAt <= new Date()
-    ) {
+    const now = new Date();
+
+    // 3. Verificar que la inscripción ya haya comenzado
+    if (now < tournament.registrationStartsAt) {
+      throw new BadRequestException(
+        'La inscripción todavía no está abierta.',
+      );
+    }
+
+    // 4. Verificar que la inscripción no haya terminado
+    if (now > tournament.registrationEndsAt) {
+      throw new BadRequestException(
+        'El período de inscripción ya terminó.',
+      );
+    }
+
+    // 5. Verificar que el torneo todavía no haya comenzado
+    if (now >= tournament.startsAt) {
       throw new BadRequestException(
         'El torneo ya comenzó.',
       );
     }
 
-    // 4. Verificar si el usuario ya está inscrito
+    // 6. Verificar que el usuario exista
+    const user =
+      await this.prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+      });
+
+    if (!user) {
+      throw new NotFoundException(
+        'El usuario no existe.',
+      );
+    }
+
+    // 7. Verificar si ya está inscrito
     const existing =
       await this.prisma.tournamentParticipant.findUnique({
         where: {
@@ -66,28 +96,32 @@ export class TournamentParticipantsService {
       );
     }
 
-    // 5. Verificar límite de jugadores
-    const participants =
-      await this.prisma.tournamentParticipant.count({
-        where: {
-          tournamentId,
-        },
-      });
-
+    // 8. Verificar límite de participantes
     if (
-      participants >= tournament.maxPlayers
+      tournament.participants.length >=
+      tournament.maxPlayers
     ) {
       throw new BadRequestException(
-        'El torneo ya alcanzó el máximo de jugadores.',
+        'El torneo ya alcanzó el máximo de participantes.',
       );
     }
 
-    // 6. Crear inscripción
+    // 9. Crear inscripción
     return this.prisma.tournamentParticipant.create({
       data: {
         tournamentId,
         userId,
-        paid: false,
+        paid: tournament.inscription === 0,
+      },
+      include: {
+        tournament: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
   }
@@ -95,6 +129,20 @@ export class TournamentParticipantsService {
   async findParticipants(
     tournamentId: number,
   ) {
+
+    // Verificar que el torneo exista
+    const tournament =
+      await this.prisma.tournament.findUnique({
+        where: {
+          id: tournamentId,
+        },
+      });
+
+    if (!tournament) {
+      throw new NotFoundException(
+        'El torneo no existe.',
+      );
+    }
 
     return this.prisma.tournamentParticipant.findMany({
       where: {

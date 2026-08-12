@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
+
 
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -40,17 +40,7 @@ export class TournamentsController {
     return this.tournamentsService.findAll();
   }
 
-  @Post(':id/join')
-  @UseGuards(JwtAuthGuard)
-  join(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
-    return this.tournamentsService.join(
-      Number(id),
-      user.id,
-    );
-  }
+ 
 
   @Get(':id/matches')
   getMatches(
