@@ -1,4 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+} from '@nestjs/common';
+
+
+
 import { HttpService } from '@nestjs/axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { firstValueFrom } from 'rxjs';
@@ -140,146 +146,45 @@ export class FootballApiService {
     };
   }
 
-async importMatches(
-  leagueId: number,
-  season: number,
-) {
+  async importMatches(
+    leagueId: number,
+    season: number,
+  ) {
+    const response = await this.client.get(
+      '/fixtures',
+      {
+        league: leagueId,
+        season,
+      },
+    );
 
-  const response = await this.client.get(
-    '/fixtures',
-    {
-      league: leagueId,
-      season,
-    },
-  );
-
-  const fixtures = response.response;
-
-  let imported = 0;
-
-  for (const item of fixtures) {
-
-    //------------------------
-    // Jornada
-    //------------------------
-
-    const round = item.league.round;
-
-    const number =
-      parseInt(round.match(/\d+/)?.[0] ?? '0');
-
-    //------------------------
-    // Buscar jornada
-    //------------------------
-
-    let matchday =
-      await this.prisma.matchday.findFirst({
-
-        where: {
-
-          leagueId,
-
-          number,
-
-        },
-
+    // Verificar errores reportados por API-Sports
+    if (
+      response.errors &&
+      Object.keys(response.errors).length > 0
+    ) {
+      throw new BadRequestException({
+        message: 'Error al consultar API-Sports.',
+        errors: response.errors,
+        leagueId,
+        season,
       });
-
-    //------------------------
-    // Crear jornada
-    //------------------------
-
-    if (!matchday) {
-
-      matchday =
-        await this.prisma.matchday.create({
-
-          data: {
-
-            leagueId,
-
-            number,
-
-            tournament: item.league.name,
-
-            season,
-
-            startDate: new Date(item.fixture.date),
-
-            endDate: new Date(item.fixture.date),
-
-            active: false,
-
-          },
-
-        });
-
     }
 
-    //------------------------
-    // Guardar partido
-    //------------------------
+    const fixtures = response.response ?? [];
 
-    await this.prisma.match.upsert({
-
-      where: {
-
-        apiId: item.fixture.id,
-
-      },
-
-      update: {
-
-        date: new Date(item.fixture.date),
-
-        homeScore: item.goals.home,
-
-        awayScore: item.goals.away,
-
-        finished:
-          item.fixture.status.short === 'FT',
-
-        matchdayId: matchday.id,
-
-      },
-
-      create: {
-
-        apiId: item.fixture.id,
-
+    if (fixtures.length === 0) {
+      return {
+        success: true,
+        imported: 0,
+        message: 'No se encontraron partidos para la temporada indicada.',
         leagueId,
+        season,
+      };
+    }
 
-        matchdayId: matchday.id,
+    let imported = 0;
 
-        homeTeamId: item.teams.home.id,
-
-        awayTeamId: item.teams.away.id,
-
-        date: new Date(item.fixture.date),
-
-        homeScore: item.goals.home,
-
-        awayScore: item.goals.away,
-
-        finished:
-          item.fixture.status.short === 'FT',
-
-      },
-
-    });
-
-    imported++;
 
   }
-
-  return {
-
-    success: true,
-
-    imported,
-
-  };
-
-}
-
 }

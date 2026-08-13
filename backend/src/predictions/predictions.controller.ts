@@ -9,26 +9,17 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import {
-  ApiBearerAuth,
-  ApiTags,
-} from '@nestjs/swagger';
-
 import { PredictionsService } from './predictions.service';
 import { CreatePredictionDto } from './dto/create-prediction.dto';
 import { UpdatePredictionDto } from './dto/update-prediction.dto';
-import { ScoringService } from './scoring/scoring.service';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
-@ApiTags('Predictions')
-@ApiBearerAuth()
 @Controller('predictions')
 export class PredictionsController {
   constructor(
     private readonly predictionsService: PredictionsService,
-    private readonly scoringService: ScoringService,
   ) {}
 
   @Post()
@@ -44,27 +35,37 @@ export class PredictionsController {
   }
 
   @Get()
-  findAll() {
-    return this.predictionsService.findAll();
+  @UseGuards(JwtAuthGuard)
+  findAll(
+    @CurrentUser() user: any,
+  ) {
+    return this.predictionsService.findAll(
+      user.id,
+    );
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
   findOne(
+    @CurrentUser() user: any,
     @Param('id') id: string,
   ) {
     return this.predictionsService.findOne(
       Number(id),
+      user.id,
     );
   }
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
   update(
+    @CurrentUser() user: any,
     @Param('id') id: string,
     @Body() dto: UpdatePredictionDto,
   ) {
     return this.predictionsService.update(
       Number(id),
+      user.id,
       dto,
     );
   }
@@ -72,20 +73,12 @@ export class PredictionsController {
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   remove(
+    @CurrentUser() user: any,
     @Param('id') id: string,
   ) {
     return this.predictionsService.remove(
       Number(id),
-    );
-  }
-
-  @Post('score/:matchId')
-  @UseGuards(JwtAuthGuard)
-  scoreMatch(
-    @Param('matchId') matchId: string,
-  ) {
-    return this.scoringService.scoreMatch(
-      Number(matchId),
+      user.id,
     );
   }
 }
