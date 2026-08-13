@@ -13,6 +13,7 @@ import { JwtStrategy } from './auth/strategies/jwt.strategy';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { CurrentUser } from './auth/decorators/current-user.decorator';
 import { TournamentsModule } from './tournaments/tournaments.module';
+import { PaymentsModule } from './payments/payments.module';
 
 
 @Module({
@@ -27,6 +28,7 @@ import { TournamentsModule } from './tournaments/tournaments.module';
     DashboardModule,
     AuthModule,
     TournamentsModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}

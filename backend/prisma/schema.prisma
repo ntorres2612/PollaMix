@@ -70,22 +70,23 @@ model Tournament {
 
   participants TournamentParticipant[]
   predictions  Prediction[]
+  payments     Payment[]
 }
 
 model TournamentParticipant {
   id Int @id @default(autoincrement())
 
   tournamentId Int
-
-  tournament Tournament @relation(fields: [tournamentId], references: [id])
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
 
   userId Int
-
-  user User @relation(fields: [userId], references: [id])
+  user   User @relation(fields: [userId], references: [id])
 
   joinedAt DateTime @default(now())
 
   paid Boolean @default(false)
+
+  payments Payment[]
 
   @@unique([tournamentId, userId])
 }
@@ -161,14 +162,26 @@ model Prediction {
 }
 
 model Payment {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   amount    Float
   reference String
   status    String
-  createdAt DateTime @default(now())
-  userId    Int
+  method    String?
+  createdAt DateTime  @default(now())
+  paidAt    DateTime?
 
-  user User @relation(fields: [userId], references: [id])
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  tournamentId Int
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+
+  participantId Int?
+  participant   TournamentParticipant? @relation(fields: [participantId], references: [id])
+
+  @@index([userId])
+  @@index([tournamentId])
+  @@index([participantId])
 }
 
 model Prize {
