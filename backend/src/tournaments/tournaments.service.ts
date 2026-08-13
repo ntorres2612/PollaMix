@@ -310,90 +310,67 @@ export class TournamentsService {
 
     }
     async getRanking(tournamentId: number) {
-
-        const tournament =
-            await this.prisma.tournament.findUnique({
-
-                where: {
-                    id: tournamentId,
-                },
-
-                include: {
-                    participants: {
-                        include: {
-                            user: {
-                                include: {
-                                    predictions: {
-                                        select: {
-                                            points: true,
-                                            match: {
-                                                select: {
-                                                    leagueId: true,
-                                                },
-                                            },
-                                        },
+        const tournament = await this.prisma.tournament.findUnique({
+            where: {
+                id: tournamentId,
+            },
+            include: {
+                participants: {
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                name: true,
+                                predictions: {
+                                    where: {
+                                        tournamentId,
+                                    },
+                                    select: {
+                                        points: true,
                                     },
                                 },
                             },
                         },
                     },
                 },
-
-            });
+            },
+        });
 
         if (!tournament) {
-
             throw new NotFoundException(
                 'La Polla no existe.',
             );
-
         }
 
-        const ranking =
-            tournament.participants.map(
-                participant => {
+        const ranking = tournament.participants.map(
+            (participant) => {
+                const points =
+                    participant.user.predictions.reduce(
+                        (sum, prediction) =>
+                            sum + prediction.points,
+                        0,
+                    );
 
-                    const points =
-                        participant.user.predictions
-                            .filter(
-                                prediction =>
-                                    prediction.match.leagueId ===
-                                    tournament.leagueId,
-                            )
-                            .reduce(
-                                (sum, prediction) =>
-                                    sum + prediction.points,
-                                0,
-                            );
-
-                    return {
-
-                        id: participant.user.id,
-
-                        name: participant.user.name,
-
-                        points,
-
-                    };
-
-                },
-            );
+                return {
+                    id: participant.user.id,
+                    name: participant.user.name,
+                    points,
+                };
+            },
+        );
 
         return ranking
-            .sort(
-                (a, b) =>
-                    b.points - a.points,
-            )
-            .map(
-                (user, index) => ({
+            .sort((a, b) => {
+                if (b.points !== a.points) {
+                    return b.points - a.points;
+                }
 
-                    position: index + 1,
-
-                    ...user,
-
-                }),
-            );
-
+                return a.name.localeCompare(b.name);
+            })
+            .map((user, index) => ({
+                position: index + 1,
+                ...user,
+            }));
     }
 
     async findAll() {
