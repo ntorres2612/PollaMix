@@ -5,10 +5,10 @@ import { PredictionsService } from './predictions.service';
 
 import { PrismaModule } from '../prisma/prisma.module';
 
+import { ScoringController } from './scoring/scoring.controller';
 import { ScoringService } from './scoring/scoring.service';
 
 @Module({
-
   imports: [
     PrismaModule,
   ],
@@ -26,7 +26,17 @@ import { ScoringService } from './scoring/scoring.service';
     PredictionsService,
     ScoringService,
   ],
-
 })
-
 export class PredictionsModule {}
+
+
+
+
+
+
+
+
+
+
+
+
