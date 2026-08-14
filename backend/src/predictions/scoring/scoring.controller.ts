@@ -7,7 +7,10 @@ import {
 } from '@nestjs/common';
 
 import { ScoringService } from './scoring.service';
+
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
 
 @Controller('scoring')
 export class ScoringController {
@@ -16,7 +19,8 @@ export class ScoringController {
   ) {}
 
   @Post(':matchId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   scoreMatch(
     @Param('matchId', ParseIntPipe) matchId: number,
   ) {

@@ -36,7 +36,7 @@ export class FootballApiController {
         );
     }
     @Post('import/matches/:leagueId/:season')
-    
+
     importMatches(
         @Param('leagueId') leagueId: string,
         @Param('season') season: string,
@@ -47,5 +47,18 @@ export class FootballApiController {
         );
     }
 
-    
+    @Post(
+        'update-results/:leagueId/:season',
+    )
+    updateResults(
+        @Param('leagueId') leagueId: string,
+        @Param('season') season: string,
+    ) {
+        return this.footballApiService.updateResults(
+            Number(leagueId),
+            Number(season),
+        );
+    }
+
+
 }

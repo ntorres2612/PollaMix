@@ -14,10 +14,13 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { CurrentUser } from './auth/decorators/current-user.decorator';
 import { TournamentsModule } from './tournaments/tournaments.module';
 import { PaymentsModule } from './payments/payments.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
+
     PrismaModule,
     TeamsModule,
     MatchdaysModule,
@@ -29,6 +32,7 @@ import { PaymentsModule } from './payments/payments.module';
     AuthModule,
     TournamentsModule,
     PaymentsModule,
+
   ],
 })
 export class AppModule {}

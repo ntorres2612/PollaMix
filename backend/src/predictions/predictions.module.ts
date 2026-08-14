@@ -15,6 +15,7 @@ import { ScoringService } from './scoring/scoring.service';
 
   controllers: [
     PredictionsController,
+    ScoringController,
   ],
 
   providers: [
@@ -28,15 +29,3 @@ import { ScoringService } from './scoring/scoring.service';
   ],
 })
 export class PredictionsModule {}
-
-
-
-
-
-
-
-
-
-
-
-

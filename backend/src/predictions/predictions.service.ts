@@ -14,7 +14,7 @@ import { UpdatePredictionDto } from './dto/update-prediction.dto';
 export class PredictionsService {
   constructor(
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   async create(
     userId: number,
@@ -106,6 +106,12 @@ export class PredictionsService {
     }
 
     // 9. Partido futuro
+    if (match.finished) {
+      throw new BadRequestException(
+        'El partido ya terminó.',
+      );
+    }
+
     if (match.date <= new Date()) {
       throw new BadRequestException(
         'El partido ya comenzó.',
@@ -216,6 +222,12 @@ export class PredictionsService {
       );
     }
 
+    if (prediction.match.finished) {
+      throw new BadRequestException(
+        'El partido ya terminó. El pronóstico no puede modificarse.',
+      );
+    }
+
     return this.prisma.prediction.update({
       where: { id },
       data: dto,
@@ -243,6 +255,12 @@ export class PredictionsService {
     if (prediction.userId !== userId) {
       throw new ForbiddenException(
         'No tienes permisos para eliminar este pronóstico.',
+      );
+    }
+
+    if (prediction.match.finished) {
+      throw new BadRequestException(
+        'El partido ya terminó. El pronóstico no puede eliminarse.',
       );
     }
 
