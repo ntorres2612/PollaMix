@@ -41,8 +41,6 @@ model League {
   matchdays   Matchday[]
   matches     Match[]
   tournaments Tournament[]
-
-  @@unique([id, season])
 }
 
 model Tournament {
@@ -83,8 +81,7 @@ model TournamentParticipant {
   user   User @relation(fields: [userId], references: [id])
 
   joinedAt DateTime @default(now())
-
-  paid Boolean @default(false)
+  paid     Boolean  @default(false)
 
   payments Payment[]
 
@@ -105,18 +102,25 @@ model Team {
 }
 
 model Matchday {
-  id         Int      @id @default(autoincrement())
-  leagueId   Int
-  league     League   @relation(fields: [leagueId], references: [id])
-  number     Int
-  tournament String
+  id Int @id @default(autoincrement())
+
+  leagueId Int
+  league   League @relation(fields: [leagueId], references: [id])
+
   season     Int
-  startDate  DateTime
-  endDate    DateTime
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  tournament String
+  roundName  String
+  number     Int?
+
+  startDate DateTime
+  endDate   DateTime
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 
   matches Match[]
+
+  @@unique([leagueId, season, tournament, roundName])
 }
 
 model Match {
@@ -141,6 +145,10 @@ model Match {
   league   League   @relation(fields: [leagueId], references: [id])
 
   predictions Prediction[]
+
+  @@index([matchdayId])
+  @@index([leagueId])
+  @@index([date])
 }
 
 model Prediction {
@@ -159,6 +167,9 @@ model Prediction {
   tournament Tournament @relation(fields: [tournamentId], references: [id])
 
   @@unique([userId, matchId, tournamentId])
+  @@index([userId])
+  @@index([matchId])
+  @@index([tournamentId])
 }
 
 model Payment {

@@ -5,7 +5,7 @@ import { UpdateMatchdayDto } from './dto/update-matchday.dto';
 
 @Controller('matchdays')
 export class MatchdaysController {
-  constructor(private readonly matchdaysService: MatchdaysService) {}
+  constructor(private readonly matchdaysService: MatchdaysService) { }
 
   @Post()
   create(@Body() createMatchdayDto: CreateMatchdayDto) {
@@ -15,6 +15,17 @@ export class MatchdaysController {
   @Get()
   findAll() {
     return this.matchdaysService.findAll();
+  }
+
+  @Get('league/:leagueId/season/:season')
+  findByLeagueAndSeason(
+    @Param('leagueId') leagueId: string,
+    @Param('season') season: string,
+  ) {
+    return this.matchdaysService.findByLeagueAndSeason(
+      Number(leagueId),
+      Number(season),
+    );
   }
 
   @Get(':id')

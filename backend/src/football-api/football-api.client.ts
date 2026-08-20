@@ -13,7 +13,10 @@ export class FootballApiClient {
         try {
 
             console.log('URL:', `https://v3.football.api-sports.io${url}`);
-            console.log('KEY:', process.env.FOOTBALL_API_KEY);
+            console.log(
+                'URL:',
+                `https://v3.football.api-sports.io${url}`,
+            );
 
             const response = await firstValueFrom(
                 this.http.get(

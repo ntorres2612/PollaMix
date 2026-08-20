@@ -8,53 +8,53 @@ export class MatchesService {
 
   constructor(
     private prisma: PrismaService,
-  ) {}
+  ) { }
 
-create(dto: CreateMatchDto) {
+  create(dto: CreateMatchDto) {
 
-  return this.prisma.match.create({
+    return this.prisma.match.create({
 
-    data: {
+      data: {
 
-      apiId: dto.apiId,
+        apiId: dto.apiId,
 
-      date: new Date(dto.date),
+        date: new Date(dto.date),
 
-      homeScore: dto.homeScore,
+        homeScore: dto.homeScore,
 
-      awayScore: dto.awayScore,
+        awayScore: dto.awayScore,
 
-      finished: dto.finished ?? false,
+        finished: dto.finished ?? false,
 
-      league: {
-        connect: {
-          id: dto.leagueId,
+        league: {
+          connect: {
+            id: dto.leagueId,
+          },
         },
+
+        homeTeam: {
+          connect: {
+            id: dto.homeTeamId,
+          },
+        },
+
+        awayTeam: {
+          connect: {
+            id: dto.awayTeamId,
+          },
+        },
+
+        matchday: {
+          connect: {
+            id: dto.matchdayId,
+          },
+        },
+
       },
 
-      homeTeam: {
-        connect: {
-          id: dto.homeTeamId,
-        },
-      },
+    });
 
-      awayTeam: {
-        connect: {
-          id: dto.awayTeamId,
-        },
-      },
-
-      matchday: {
-        connect: {
-          id: dto.matchdayId,
-        },
-      },
-
-    },
-
-  });
-
-}
+  }
 
   findAll() {
 
@@ -100,67 +100,83 @@ create(dto: CreateMatchDto) {
 
   }
 
- update(id: number, dto: UpdateMatchDto) {
+  update(id: number, dto: UpdateMatchDto) {
 
-  return this.prisma.match.update({
+    return this.prisma.match.update({
 
-    where: { id },
+      where: { id },
 
-    data: {
+      data: {
 
-      ...(dto.date && {
-        date: new Date(dto.date),
-      }),
+        ...(dto.date && {
+          date: new Date(dto.date),
+        }),
 
-      ...(dto.homeScore !== undefined && {
-        homeScore: dto.homeScore,
-      }),
+        ...(dto.homeScore !== undefined && {
+          homeScore: dto.homeScore,
+        }),
 
-      ...(dto.awayScore !== undefined && {
-        awayScore: dto.awayScore,
-      }),
+        ...(dto.awayScore !== undefined && {
+          awayScore: dto.awayScore,
+        }),
 
-      ...(dto.finished !== undefined && {
-        finished: dto.finished,
-      }),
+        ...(dto.finished !== undefined && {
+          finished: dto.finished,
+        }),
 
-      ...(dto.homeTeamId && {
-        homeTeam: {
-          connect: {
-            id: dto.homeTeamId,
+        ...(dto.homeTeamId && {
+          homeTeam: {
+            connect: {
+              id: dto.homeTeamId,
+            },
           },
-        },
-      }),
+        }),
 
-      ...(dto.awayTeamId && {
-        awayTeam: {
-          connect: {
-            id: dto.awayTeamId,
+        ...(dto.awayTeamId && {
+          awayTeam: {
+            connect: {
+              id: dto.awayTeamId,
+            },
           },
-        },
-      }),
+        }),
 
-      ...(dto.matchdayId && {
-        matchday: {
-          connect: {
-            id: dto.matchdayId,
+        ...(dto.matchdayId && {
+          matchday: {
+            connect: {
+              id: dto.matchdayId,
+            },
           },
-        },
-      }),
+        }),
 
-      ...(dto.leagueId && {
-        league: {
-          connect: {
-            id: dto.leagueId,
+        ...(dto.leagueId && {
+          league: {
+            connect: {
+              id: dto.leagueId,
+            },
           },
-        },
-      }),
+        }),
 
-    },
+      },
 
-  });
+    });
 
-}
+  }
+
+  async findByMatchday(matchdayId: number) {
+    return this.prisma.match.findMany({
+      where: {
+        matchdayId,
+      },
+      include: {
+        homeTeam: true,
+        awayTeam: true,
+        matchday: true,
+      },
+      orderBy: {
+        date: 'asc',
+      },
+    });
+  }
 
   remove(id: number) {
 

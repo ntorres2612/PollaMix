@@ -5,7 +5,7 @@ import { UpdateMatchDto } from './dto/update-match.dto';
 
 @Controller('matches')
 export class MatchesController {
-  constructor(private readonly matchesService: MatchesService) {}
+  constructor(private readonly matchesService: MatchesService) { }
 
   @Post()
   create(@Body() createMatchDto: CreateMatchDto) {
@@ -15,6 +15,15 @@ export class MatchesController {
   @Get()
   findAll() {
     return this.matchesService.findAll();
+  }
+
+  @Get('matchday/:matchdayId')
+  findByMatchday(
+    @Param('matchdayId') matchdayId: string,
+  ) {
+    return this.matchesService.findByMatchday(
+      Number(matchdayId),
+    );
   }
 
   @Get(':id')

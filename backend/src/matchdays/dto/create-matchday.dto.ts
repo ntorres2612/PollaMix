@@ -18,6 +18,10 @@ export class CreateMatchdayDto {
   @IsNotEmpty()
   tournament!: string;
 
+  @IsString()
+  @IsNotEmpty()
+  roundName!: string;
+
   @IsInt()
   season!: number;
 
@@ -29,5 +33,4 @@ export class CreateMatchdayDto {
 
   @IsBoolean()
   active!: boolean;
-
 }

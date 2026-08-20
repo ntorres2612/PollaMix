@@ -17,6 +17,8 @@ export class MatchdaysService {
 
         tournament: dto.tournament,
 
+        roundName: dto.roundName,
+
         season: dto.season,
 
         startDate: new Date(dto.startDate),
@@ -26,9 +28,13 @@ export class MatchdaysService {
         active: dto.active,
 
         league: {
+
           connect: {
+
             id: dto.leagueId,
+
           },
+
         },
 
       },
@@ -51,55 +57,70 @@ export class MatchdaysService {
     });
   }
 
-update(id: number, dto: UpdateMatchdayDto) {
+  update(id: number, dto: UpdateMatchdayDto) {
 
-  return this.prisma.matchday.update({
+    return this.prisma.matchday.update({
 
-    where: { id },
+      where: { id },
 
-    data: {
+      data: {
 
-      ...(dto.number !== undefined && {
-        number: dto.number,
-      }),
+        ...(dto.number !== undefined && {
+          number: dto.number,
+        }),
 
-      ...(dto.tournament && {
-        tournament: dto.tournament,
-      }),
+        ...(dto.tournament && {
+          tournament: dto.tournament,
+        }),
 
-      ...(dto.season !== undefined && {
-        season: dto.season,
-      }),
+        ...(dto.season !== undefined && {
+          season: dto.season,
+        }),
 
-      ...(dto.startDate && {
-        startDate: new Date(dto.startDate),
-      }),
+        ...(dto.startDate && {
+          startDate: new Date(dto.startDate),
+        }),
 
-      ...(dto.endDate && {
-        endDate: new Date(dto.endDate),
-      }),
+        ...(dto.endDate && {
+          endDate: new Date(dto.endDate),
+        }),
 
-      ...(dto.active !== undefined && {
-        active: dto.active,
-      }),
+        ...(dto.active !== undefined && {
+          active: dto.active,
+        }),
 
-      ...(dto.leagueId !== undefined && {
-        league: {
-          connect: {
-            id: dto.leagueId,
+        ...(dto.leagueId !== undefined && {
+          league: {
+            connect: {
+              id: dto.leagueId,
+            },
           },
-        },
-      }),
+        }),
 
-    },
+      },
 
-  });
+    });
 
-}
+  }
 
   remove(id: number) {
     return this.prisma.matchday.delete({
       where: { id },
+    });
+  }
+
+  async findByLeagueAndSeason(
+    leagueId: number,
+    season: number,
+  ) {
+    return this.prisma.matchday.findMany({
+      where: {
+        leagueId,
+        season,
+      },
+      orderBy: {
+        number: 'asc',
+      },
     });
   }
 }

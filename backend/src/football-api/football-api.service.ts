@@ -157,6 +157,35 @@ export class FootballApiService {
       },
     );
 
+    console.log('======================================');
+    console.log('IMPORT MATCHES');
+    console.log('League:', leagueId);
+    console.log('Season:', season);
+    console.log('API RESULTS:', response.results);
+    console.log('API ERRORS:', response.errors);
+    console.log(
+      'FIXTURES RECIBIDOS:',
+      response.response?.length ?? 0,
+    );
+
+    if (response.response?.length > 0) {
+      console.log(
+        'PRIMER FIXTURE:',
+        JSON.stringify(
+          response.response[0],
+          null,
+          2,
+        ),
+      );
+
+      console.log(
+        'ROUND PRIMER FIXTURE:',
+        response.response[0].league?.round,
+      );
+    }
+
+    console.log('======================================');
+
     // Verificar errores reportados por API-Sports
     if (
       response.errors &&
@@ -171,6 +200,29 @@ export class FootballApiService {
     }
 
     const fixtures = response.response ?? [];
+
+    console.log('========================================');
+    console.log('IMPORT MATCHES');
+    console.log('League:', leagueId);
+    console.log('Season:', season);
+    console.log('API RESULTS:', response.results);
+    console.log('API ERRORS:', response.errors);
+    console.log('FIXTURES:', fixtures.length);
+
+    if (fixtures.length > 0) {
+      console.log('PRIMER FIXTURE:');
+      console.dir(fixtures[0], { depth: null });
+    }
+
+    console.log('========================================');
+
+    let skipped = 0;
+    let skippedReason = {
+      round: 0,
+      fixtureId: 0,
+      date: 0,
+      teams: 0,
+    };
 
     if (fixtures.length === 0) {
       return {
@@ -223,26 +275,60 @@ export class FootballApiService {
         finishedStatuses.includes(status);
 
       const round =
-        fixture.league?.round ?? 'Regular Season';
+        String(
+          fixture.league?.round ??
+          'Regular Season',
+        ).trim();
 
-      /*
-       * Obtener número de jornada.
-       *
-       * Ejemplos:
-       * "Regular Season - 1"  -> 1
-       * "Regular Season - 18" -> 18
-       */
-      const roundMatch =
-        String(round).match(/(\d+)$/);
+      /* const parsedRound =
+         this.parseRound(round);
+ 
+       console.log(
+         'ROUND API:',
+         round,
+         'PARSED:',
+         parsedRound,
+       );
+ 
+       if (
+         parsedRound.type !== 'REGULAR' ||
+         parsedRound.number === null
+       ) {
+         continue;
+       }*/
 
-      const matchdayNumber =
-        roundMatch
-          ? Number(roundMatch[1])
-          : 1;
+      const parsedRound =
+        this.parseRound(round);
+
+      console.log(
+        'ROUND API:',
+        JSON.stringify(round),
+        'PARSED:',
+        parsedRound,
+      );
+
+      if (
+        parsedRound.type !== 'REGULAR' ||
+        parsedRound.number === null
+      ) {
+        skipped++;
+        skippedReason.round++;
+
+        console.log(
+          'FIXTURE DESCARTADO POR ROUND:',
+          {
+            fixtureId,
+            round,
+            parsedRound,
+          },
+        );
+
+        continue;
+      }
 
       /*
        * Validaciones básicas
-       */
+      
       if (!fixtureId) {
         continue;
       }
@@ -253,8 +339,31 @@ export class FootballApiService {
 
       if (!homeTeamId || !awayTeamId) {
         continue;
+      } */
+      if (!fixtureId) {
+        console.log('DESCARTADO: fixtureId');
+        continue;
       }
 
+      if (!fixtureDate) {
+        console.log(
+          'DESCARTADO: fixtureDate',
+          fixture,
+        );
+        continue;
+      }
+
+      if (!homeTeamId || !awayTeamId) {
+        console.log(
+          'DESCARTADO: equipos',
+          {
+            fixtureId,
+            homeTeamId,
+            awayTeamId,
+          },
+        );
+        continue;
+      }
       /*
        * Verificar que los equipos existan.
        */
@@ -272,10 +381,25 @@ export class FootballApiService {
             },
           }),
         ]);
+      /*
+            if (!homeTeam || !awayTeam) {
+              console.warn(
+                `Partido ${fixtureId} omitido: equipos no encontrados.`,
+              );
+      
+              continue;
+            }*/
 
       if (!homeTeam || !awayTeam) {
         console.warn(
-          `Partido ${fixtureId} omitido: equipos no encontrados.`,
+          'PARTIDO DESCARTADO: EQUIPO NO ENCONTRADO',
+          {
+            fixtureId,
+            homeTeamId,
+            awayTeamId,
+            homeExists: !!homeTeam,
+            awayExists: !!awayTeam,
+          },
         );
 
         continue;
@@ -289,7 +413,8 @@ export class FootballApiService {
           where: {
             leagueId,
             season,
-            number: matchdayNumber,
+            tournament: 'Liga MX',
+            roundName: parsedRound.name,
           },
         });
 
@@ -301,12 +426,13 @@ export class FootballApiService {
           await this.prisma.matchday.create({
             data: {
               leagueId,
-              number: matchdayNumber,
-              tournament: String(round),
+              number: parsedRound.number,
+              tournament: 'Liga MX',
+              roundName: parsedRound.name,
               season,
               startDate: fixtureDate,
               endDate: fixtureDate,
-              active: true,
+              active: false,
             },
           });
 
@@ -400,13 +526,27 @@ export class FootballApiService {
         imported++;
       }
     }
+    /*
+        return {
+          success: true,
+          imported,
+          updated,
+          matchdaysCreated,
+          total: imported + updated,
+          leagueId,
+          season,
+        };
+      }*/
 
     return {
       success: true,
       imported,
       updated,
       matchdaysCreated,
+      skipped,
+      skippedReason,
       total: imported + updated,
+      fixturesReceived: fixtures.length,
       leagueId,
       season,
     };
@@ -436,7 +576,31 @@ export class FootballApiService {
       });
     }
 
+    console.log('======================================');
+    console.log('API-Sports /fixtures');
+    console.log('League:', leagueId);
+    console.log('Season:', season);
+    console.log('Results:', response.results);
+    console.log('Errors:', response.errors);
+    console.log('Response length:', response.response?.length);
+    console.log('======================================');
+
     const fixtures = response.response ?? [];
+
+    console.log('==============================');
+    console.log('IMPORT MATCHES DEBUG');
+    console.log('League:', leagueId);
+    console.log('Season:', season);
+    console.log('API results:', response.results);
+    console.log('API errors:', response.errors);
+    console.log('Fixtures recibidos:', fixtures.length);
+
+    if (fixtures.length > 0) {
+      console.log('Primer fixture:');
+      console.dir(fixtures[0], { depth: null });
+    }
+
+    console.log('==============================');
 
     if (fixtures.length === 0) {
       return {
@@ -529,6 +693,8 @@ export class FootballApiService {
       }
     }
 
+
+
     return {
       success: true,
       updated,
@@ -538,5 +704,108 @@ export class FootballApiService {
       leagueId,
       season,
     };
+  }
+
+  private parseRound(round: string) {
+    if (!round) {
+      return {
+        type: 'OTHER',
+        number: null,
+        name: round,
+        phase: null,
+      };
+    }
+
+    const normalized = round.trim();
+
+    /**
+     * FORMATO API:
+     * Apertura - 1
+     * Apertura - 2
+     * ...
+     * Clausura - 1
+     * Clausura - 2
+     * ...
+     */
+    const regularMatch = normalized.match(
+      /^(Apertura|Clausura)\s*-\s*(\d+)$/i,
+    );
+
+    if (regularMatch) {
+      const phase =
+        regularMatch[1].toLowerCase() === 'apertura'
+          ? 'APERTURA'
+          : 'CLAUSURA';
+
+      const number = Number(regularMatch[2]);
+
+      return {
+        type: 'REGULAR',
+        number,
+        name: normalized,
+        phase,
+      };
+    }
+
+    /**
+     * PLAYOFFS
+     */
+    const playoffKeywords = [
+      'final',
+      'semi-final',
+      'semi-finals',
+      'semifinal',
+      'semifinales',
+      'quarter-final',
+      'quarter-finals',
+      'cuartos',
+      'play-off',
+      'play-offs',
+      'playoff',
+      'playoffs',
+      'reclasificacion',
+      'reclasificación',
+    ];
+
+    const lower = normalized.toLowerCase();
+
+    if (
+      playoffKeywords.some((keyword) =>
+        lower.includes(keyword),
+      )
+    ) {
+      return {
+        type: 'PLAYOFF',
+        number: null,
+        name: normalized,
+        phase: null,
+      };
+    }
+
+    return {
+      type: 'OTHER',
+      number: null,
+      name: normalized,
+      phase: null,
+    };
+  }
+
+  private getLigaMxTournament(
+    fixtureDate: Date,
+    season: number,
+  ): string {
+    if (season !== 2024) {
+      throw new BadRequestException(
+        `No existe una regla configurada para Liga MX season ${season}`,
+      );
+    }
+
+    const month = fixtureDate.getUTCMonth() + 1;
+
+    if (month >= 7 && month <= 12) {
+      return 'Apertura';
+    }
+
+    return 'Clausura';
   }
 }

@@ -260,54 +260,81 @@ export class TournamentsService {
     }
 
     async getMatches(tournamentId: number) {
-
         const tournament =
             await this.prisma.tournament.findUnique({
-
                 where: {
                     id: tournamentId,
                 },
-
             });
 
         if (!tournament) {
-
             throw new NotFoundException(
                 'La Polla no existe.',
             );
-
         }
 
-        return this.prisma.match.findMany({
-
-            where: {
-
-                leagueId: tournament.leagueId,
-
-                matchday: {
+        const matchdays =
+            await this.prisma.matchday.findMany({
+                where: {
+                    leagueId: tournament.leagueId,
                     season: tournament.season,
                 },
 
+                include: {
+                    matches: {
+                        include: {
+                            homeTeam: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    shortName: true,
+                                    logo: true,
+                                },
+                            },
+
+                            awayTeam: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    shortName: true,
+                                    logo: true,
+                                },
+                            },
+                        },
+
+                        orderBy: {
+                            date: 'asc',
+                        },
+                    },
+                },
+
+                orderBy: {
+                    number: 'asc',
+                },
+            });
+
+        return {
+            tournament: {
+                id: tournament.id,
+                name: tournament.name,
+                season: tournament.season,
+                leagueId: tournament.leagueId,
             },
 
-            include: {
+            matchdays: matchdays.map(
+                (matchday) => ({
+                    id: matchday.id,
+                    number: matchday.number,
+                    tournament: matchday.tournament,
+                    season: matchday.season,
+                    startDate: matchday.startDate,
+                    endDate: matchday.endDate,
+                    active: matchday.active,
 
-                homeTeam: true,
-
-                awayTeam: true,
-
-                matchday: true,
-
-            },
-
-            orderBy: {
-
-                date: 'asc',
-
-            },
-
-        });
-
+                    matches: matchday.matches,
+                }),
+            ),
+        };
     }
     async getRanking(tournamentId: number) {
         const tournament = await this.prisma.tournament.findUnique({
