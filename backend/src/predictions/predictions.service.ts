@@ -95,6 +95,12 @@ export class PredictionsService {
       );
     }
 
+    // 8. Torneo iniciado
+    if (new Date() < tournament.startsAt) {
+      throw new BadRequestException(
+        'El torneo todavía no ha comenzado.',
+      );
+    }
     // 8. Torneo no terminado
     if (
       tournament.endsAt &&
@@ -154,11 +160,19 @@ export class PredictionsService {
         userId,
       },
       include: {
-        match: true,
+        match: {
+          include: {
+            homeTeam: true,
+            awayTeam: true,
+            matchday: true,
+          },
+        },
         tournament: true,
       },
       orderBy: {
-        createdAt: 'desc',
+        match: {
+          date: 'asc',
+        },
       },
     });
   }
@@ -171,7 +185,13 @@ export class PredictionsService {
       await this.prisma.prediction.findUnique({
         where: { id },
         include: {
-          match: true,
+          match: {
+            include: {
+              homeTeam: true,
+              awayTeam: true,
+              matchday: true,
+            },
+          },
           tournament: true,
         },
       });
@@ -185,6 +205,17 @@ export class PredictionsService {
     if (prediction.userId !== userId) {
       throw new ForbiddenException(
         'No tienes permisos para consultar este pronóstico.',
+      );
+    }
+    if (!prediction.tournament.active) {
+      throw new BadRequestException(
+        'El torneo no está activo.',
+      );
+    }
+
+    if (prediction.tournament.endsAt <= new Date()) {
+      throw new BadRequestException(
+        'El torneo ya terminó.',
       );
     }
 
@@ -201,6 +232,7 @@ export class PredictionsService {
         where: { id },
         include: {
           match: true,
+          tournament: true,
         },
       });
 
@@ -243,6 +275,7 @@ export class PredictionsService {
         where: { id },
         include: {
           match: true,
+          tournament: true,
         },
       });
 
@@ -255,6 +288,18 @@ export class PredictionsService {
     if (prediction.userId !== userId) {
       throw new ForbiddenException(
         'No tienes permisos para eliminar este pronóstico.',
+      );
+    }
+
+    if (!prediction.tournament.active) {
+      throw new BadRequestException(
+        'El torneo no está activo.',
+      );
+    }
+
+    if (prediction.tournament.endsAt <= new Date()) {
+      throw new BadRequestException(
+        'El torneo ya terminó. El pronóstico no puede eliminarse.',
       );
     }
 
