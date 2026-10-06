@@ -60,8 +60,9 @@ model Tournament {
   registrationStartsAt DateTime
   registrationEndsAt   DateTime
 
-  startsAt DateTime
-  endsAt   DateTime
+  startsAt          DateTime
+  endsAt            DateTime
+  tournamentMatches TournamentMatch[]
 
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -139,6 +140,8 @@ model Match {
   matchdayId Int
   leagueId   Int
 
+  tournamentMatches TournamentMatch[]
+
   homeTeam Team     @relation("HomeTeam", fields: [homeTeamId], references: [id])
   awayTeam Team     @relation("AwayTeam", fields: [awayTeamId], references: [id])
   matchday Matchday @relation(fields: [matchdayId], references: [id])
@@ -200,4 +203,20 @@ model Prize {
   title     String
   amount    Float
   createdAt DateTime @default(now())
+}
+
+model TournamentMatch {
+  id           Int      @id @default(autoincrement())
+  tournamentId Int
+  matchId      Int
+  position     Int
+  createdAt    DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  match      Match      @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, matchId])
+  @@unique([tournamentId, position])
+  @@index([tournamentId])
+  @@index([matchId])
 }

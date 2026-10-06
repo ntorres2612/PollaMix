@@ -64,6 +64,21 @@ export class PredictionsService {
       );
     }
 
+    const selectedMatch =
+      await this.prisma.tournamentMatch.findUnique({
+        where: {
+          tournamentId_matchId: {
+            tournamentId: dto.tournamentId,
+            matchId: dto.matchId,
+          },
+        },
+      });
+
+    if (!selectedMatch) {
+      throw new BadRequestException(
+        'Este partido no está habilitado para esta Polla.',
+      );
+    }
     // 5. Verificar inscripción
     const participant =
       await this.prisma.tournamentParticipant.findUnique({

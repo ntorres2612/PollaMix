@@ -16,6 +16,9 @@ import { UpdatePredictionDto } from './dto/update-prediction.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
+
 @Controller('predictions')
 export class PredictionsController {
   constructor(
@@ -23,7 +26,8 @@ export class PredictionsController {
   ) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('PLAYER')
   create(
     @CurrentUser() user: any,
     @Body() dto: CreatePredictionDto,
@@ -35,7 +39,8 @@ export class PredictionsController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('PLAYER')
   findAll(
     @CurrentUser() user: any,
   ) {
@@ -45,7 +50,8 @@ export class PredictionsController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('PLAYER')
   findOne(
     @CurrentUser() user: any,
     @Param('id') id: string,
@@ -57,7 +63,8 @@ export class PredictionsController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('PLAYER')
   update(
     @CurrentUser() user: any,
     @Param('id') id: string,
@@ -71,7 +78,8 @@ export class PredictionsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('PLAYER')
   remove(
     @CurrentUser() user: any,
     @Param('id') id: string,
