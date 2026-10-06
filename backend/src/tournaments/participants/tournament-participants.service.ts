@@ -2,107 +2,86 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
+} from "@nestjs/common";
 
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from "../../prisma/prisma.service";
 
 @Injectable()
 export class TournamentParticipantsService {
+  constructor(private readonly prisma: PrismaService) {}
 
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
-
-  async join(
-    tournamentId: number,
-    userId: number,
-  ) {
-
+  async join(tournamentId: number, userId: number) {
     // 1. Verificar que el torneo exista
-    const tournament =
-      await this.prisma.tournament.findUnique({
-        where: {
-          id: tournamentId,
-        },
-        include: {
-          participants: true,
-        },
-      });
+    const tournament = await this.prisma.tournament.findUnique({
+      where: {
+        id: tournamentId,
+      },
+      include: {
+        participants: true,
+      },
+    });
 
     if (!tournament) {
-      throw new NotFoundException(
-        'El torneo no existe.',
-      );
+      throw new NotFoundException("El torneo no existe.");
     }
 
     // 2. Verificar que el torneo esté activo
     if (!tournament.active) {
-      throw new BadRequestException(
-        'El torneo no está activo.',
-      );
+      throw new BadRequestException("El torneo no está activo.");
     }
 
     const now = new Date();
 
     // 3. Verificar que la inscripción ya haya comenzado
     if (now < tournament.registrationStartsAt) {
-      throw new BadRequestException(
-        'La inscripción todavía no está abierta.',
-      );
+      throw new BadRequestException("La inscripción todavía no está abierta.");
     }
 
     // 4. Verificar que la inscripción no haya terminado
     if (now > tournament.registrationEndsAt) {
-      throw new BadRequestException(
-        'El período de inscripción ya terminó.',
-      );
+      throw new BadRequestException("El período de inscripción ya terminó.");
     }
 
     // 5. Verificar que el torneo todavía no haya comenzado
     if (now >= tournament.startsAt) {
-      throw new BadRequestException(
-        'El torneo ya comenzó.',
-      );
+      throw new BadRequestException("El torneo ya comenzó.");
     }
 
     // 6. Verificar que el usuario exista
-    const user =
-      await this.prisma.user.findUnique({
-        where: {
-          id: userId,
-        },
-      });
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
 
     if (!user) {
-      throw new NotFoundException(
-        'El usuario no existe.',
-      );
+      throw new NotFoundException("El usuario no existe.");
     }
 
     // 7. Verificar si ya está inscrito
-    const existing =
-      await this.prisma.tournamentParticipant.findUnique({
-        where: {
-          tournamentId_userId: {
-            tournamentId,
-            userId,
-          },
+    const existing = await this.prisma.tournamentParticipant.findUnique({
+      where: {
+        tournamentId_userId: {
+          tournamentId,
+          userId,
         },
-      });
+      },
+    });
 
     if (existing) {
       throw new BadRequestException(
-        'El usuario ya está inscrito en este torneo.',
+        "El usuario ya está inscrito en este torneo.",
       );
     }
 
     // 8. Verificar límite de participantes
+    // maxPlayers <= 0 significa participantes ilimitados.
     if (
-      tournament.participants.length >=
-      tournament.maxPlayers
+      tournament.maxPlayers > 0 &&
+      tournament.participants.length >= tournament.maxPlayers
     ) {
       throw new BadRequestException(
-        'El torneo ya alcanzó el máximo de participantes.',
+        "El torneo ya alcanzó el máximo de participantes.",
       );
     }
 
@@ -126,22 +105,16 @@ export class TournamentParticipantsService {
     });
   }
 
-  async findParticipants(
-    tournamentId: number,
-  ) {
-
+  async findParticipants(tournamentId: number) {
     // Verificar que el torneo exista
-    const tournament =
-      await this.prisma.tournament.findUnique({
-        where: {
-          id: tournamentId,
-        },
-      });
+    const tournament = await this.prisma.tournament.findUnique({
+      where: {
+        id: tournamentId,
+      },
+    });
 
     if (!tournament) {
-      throw new NotFoundException(
-        'El torneo no existe.',
-      );
+      throw new NotFoundException("El torneo no existe.");
     }
 
     return this.prisma.tournamentParticipant.findMany({
@@ -158,7 +131,7 @@ export class TournamentParticipantsService {
         },
       },
       orderBy: {
-        joinedAt: 'asc',
+        joinedAt: "asc",
       },
     });
   }
