@@ -3,145 +3,370 @@ import {
   Injectable,
 } from '@nestjs/common';
 
+import { Cron } from '@nestjs/schedule';
 
-
-import { HttpService } from '@nestjs/axios';
 import { PrismaService } from '../prisma/prisma.service';
-import { firstValueFrom } from 'rxjs';
 import { FootballApiClient } from './football-api.client';
 import { ScoringService } from '../predictions/scoring/scoring.service';
+import { EspnFootballService } from './espn/espn-football.service';
 
 @Injectable()
 export class FootballApiService {
+  private syncInProgress = false;
 
   constructor(
-    private prisma: PrismaService,
-    private client: FootballApiClient,
-    private scoringService: ScoringService,
-  ) { }
+    private readonly prisma: PrismaService,
+    private readonly client: FootballApiClient,
+    private readonly scoringService: ScoringService,
+    private readonly espnFootballService: EspnFootballService,
+  ) {}
+
+  @Cron('*/10 * * * *', {
+    name: 'pollamix-results-sync',
+  })
+  async syncActiveTournamentResults() {
+    if (this.syncInProgress) {
+      console.warn(
+        '[CRON] Sincronización omitida: ya existe una sincronización en progreso.',
+      );
+
+      return {
+        success: false,
+        skipped: true,
+        message:
+          'Ya existe una sincronización en progreso.',
+      };
+    }
+
+    this.syncInProgress = true;
+
+    const startedAt =
+      new Date();
+
+    try {
+      const now =
+        new Date();
+
+      const tournaments =
+        await this.prisma.tournament.findMany({
+          where: {
+            active: true,
+            endsAt: {
+              gte: now,
+            },
+          },
+
+          select: {
+            id: true,
+            name: true,
+            leagueId: true,
+            season: true,
+          },
+
+          orderBy: {
+            startsAt: 'asc',
+          },
+        });
+
+      if (
+        tournaments.length ===
+        0
+      ) {
+        console.log(
+          '[CRON] No existen Pollas activas para sincronizar.',
+        );
+
+        return {
+          success: true,
+          skipped: false,
+          tournamentsFound: 0,
+          competitions: 0,
+          results: [],
+          startedAt,
+          finishedAt:
+            new Date(),
+        };
+      }
+
+      const competitions =
+        Array.from(
+          new Map(
+            tournaments.map(
+              (tournament) => [
+                `${tournament.leagueId}-${tournament.season}`,
+                {
+                  leagueId:
+                    tournament.leagueId,
+
+                  season:
+                    tournament.season,
+                },
+              ],
+            ),
+          ).values(),
+        );
+
+      console.log(
+        '[CRON] Pollas activas:',
+        tournaments.length,
+      );
+
+      console.log(
+        '[CRON] Combinaciones liga/temporada:',
+        competitions.length,
+      );
+
+      const results: Array<{
+        leagueId: number;
+        season: number;
+        success: boolean;
+        result?: any;
+        error?: string;
+      }> = [];
+
+      for (
+        const competition of
+          competitions
+      ) {
+        try {
+          const result =
+            await this.updateResults(
+              competition.leagueId,
+              competition.season,
+            );
+
+          results.push({
+            leagueId:
+              competition.leagueId,
+
+            season:
+              competition.season,
+
+            success: true,
+            result,
+          });
+        } catch (
+          error
+        ) {
+          results.push({
+            leagueId:
+              competition.leagueId,
+
+            season:
+              competition.season,
+
+            success: false,
+
+            error:
+              error instanceof
+              Error
+                ? error.message
+                : String(error),
+          });
+        }
+      }
+
+      return {
+        success: true,
+        skipped: false,
+        tournamentsFound:
+          tournaments.length,
+
+        competitions:
+          competitions.length,
+
+        results,
+
+        startedAt,
+
+        finishedAt:
+          new Date(),
+      };
+    } finally {
+      this.syncInProgress =
+        false;
+    }
+  }
 
   async getLeagues() {
-
-    console.log('=== FootballApiService ===');
-    console.log(this.client);
-
     return {
       ok: true,
     };
-
   }
+
   async importLeagues() {
+    const data =
+      await this.client.get(
+        '/leagues',
+      );
 
-    const data = await this.client.get('/leagues');
-
-    const leagues = data.response;
+    const leagues =
+      data.response ?? [];
 
     let imported = 0;
 
-    for (const item of leagues) {
-
+    for (
+      const item of
+        leagues
+    ) {
       await this.prisma.league.upsert({
-
         where: {
-          id: item.league.id,
+          id:
+            item.league.id,
         },
 
         update: {
+          name:
+            item.league.name,
 
-          name: item.league.name,
-          type: item.league.type,
-          country: item.country.name,
-          countryCode: item.country.code,
-          logo: item.league.logo,
-          season: item.seasons.at(-1)?.year ?? 2026,
+          type:
+            item.league.type,
+
+          country:
+            item.country.name,
+
+          countryCode:
+            item.country.code,
+
+          logo:
+            item.league.logo,
+
+          season:
+            item.seasons.at(-1)
+              ?.year ??
+            2026,
+
           active: true,
-
         },
 
         create: {
+          id:
+            item.league.id,
 
-          id: item.league.id,
-          name: item.league.name,
-          type: item.league.type,
-          country: item.country.name,
-          countryCode: item.country.code,
-          logo: item.league.logo,
-          season: item.seasons.at(-1)?.year ?? 2026,
+          name:
+            item.league.name,
+
+          type:
+            item.league.type,
+
+          country:
+            item.country.name,
+
+          countryCode:
+            item.country.code,
+
+          logo:
+            item.league.logo,
+
+          season:
+            item.seasons.at(-1)
+              ?.year ??
+            2026,
+
           active: true,
-
-        }
-
+        },
       });
 
       imported++;
-
     }
 
     return {
       success: true,
       imported,
     };
-
   }
 
   async importTeams(
     leagueId: number,
     season: number,
   ) {
+    const response =
+      await this.client.get(
+        '/teams',
+        {
+          league: leagueId,
+          season,
+        },
+      );
 
-    console.log('==============================');
-    console.log('IMPORTANDO EQUIPOS');
-    console.log('League:', leagueId);
-    console.log('Season:', season);
+    if (
+      response.errors &&
+      Object.keys(
+        response.errors,
+      ).length > 0
+    ) {
+      throw new BadRequestException({
+        message:
+          'Error al consultar API-Sports.',
 
-    const response = await this.client.get('/teams', {
-      league: leagueId,
-      season,
-    });
+        errors:
+          response.errors,
 
-    console.log('Resultados:', response.results);
-    console.log('Errores:', response.errors);
-    console.log('Primer equipo:');
-    console.dir(response.response[0], { depth: null });
+        leagueId,
+        season,
+      });
+    }
 
-    const teams = response.response ?? [];
+    const teams =
+      response.response ?? [];
 
-    for (const item of teams) {
-
+    for (
+      const item of
+        teams
+    ) {
       await this.prisma.team.upsert({
-
         where: {
-          id: item.team.id,
+          id:
+            item.team.id,
         },
 
         update: {
-          name: item.team.name,
+          name:
+            item.team.name,
+
           shortName:
             item.team.code ??
-            item.team.name.substring(0, 3).toUpperCase(),
-          logo: item.team.logo,
+            item.team.name
+              .substring(
+                0,
+                3,
+              )
+              .toUpperCase(),
+
+          logo:
+            item.team.logo,
+
           leagueId,
         },
 
         create: {
-          id: item.team.id,
-          name: item.team.name,
+          id:
+            item.team.id,
+
+          name:
+            item.team.name,
+
           shortName:
             item.team.code ??
-            item.team.name.substring(0, 3).toUpperCase(),
-          logo: item.team.logo,
+            item.team.name
+              .substring(
+                0,
+                3,
+              )
+              .toUpperCase(),
+
+          logo:
+            item.team.logo,
+
           leagueId,
         },
-
       });
-
     }
-
-    console.log(`Equipos importados: ${teams.length}`);
 
     return {
       success: true,
-      imported: teams.length,
+      imported:
+        teams.length,
     };
   }
 
@@ -149,87 +374,48 @@ export class FootballApiService {
     leagueId: number,
     season: number,
   ) {
-    const response = await this.client.get(
-      '/fixtures',
-      {
-        league: leagueId,
-        season,
-      },
-    );
-
-    console.log('======================================');
-    console.log('IMPORT MATCHES');
-    console.log('League:', leagueId);
-    console.log('Season:', season);
-    console.log('API RESULTS:', response.results);
-    console.log('API ERRORS:', response.errors);
-    console.log(
-      'FIXTURES RECIBIDOS:',
-      response.response?.length ?? 0,
-    );
-
-    if (response.response?.length > 0) {
-      console.log(
-        'PRIMER FIXTURE:',
-        JSON.stringify(
-          response.response[0],
-          null,
-          2,
-        ),
+    const response =
+      await this.client.get(
+        '/fixtures',
+        {
+          league: leagueId,
+          season,
+        },
       );
 
-      console.log(
-        'ROUND PRIMER FIXTURE:',
-        response.response[0].league?.round,
-      );
-    }
-
-    console.log('======================================');
-
-    // Verificar errores reportados por API-Sports
     if (
       response.errors &&
-      Object.keys(response.errors).length > 0
+      Object.keys(
+        response.errors,
+      ).length > 0
     ) {
       throw new BadRequestException({
-        message: 'Error al consultar API-Sports.',
-        errors: response.errors,
+        message:
+          'Error al consultar API-Sports.',
+
+        errors:
+          response.errors,
+
         leagueId,
         season,
       });
     }
 
-    const fixtures = response.response ?? [];
+    const fixtures =
+      response.response ?? [];
 
-    console.log('========================================');
-    console.log('IMPORT MATCHES');
-    console.log('League:', leagueId);
-    console.log('Season:', season);
-    console.log('API RESULTS:', response.results);
-    console.log('API ERRORS:', response.errors);
-    console.log('FIXTURES:', fixtures.length);
-
-    if (fixtures.length > 0) {
-      console.log('PRIMER FIXTURE:');
-      console.dir(fixtures[0], { depth: null });
-    }
-
-    console.log('========================================');
-
-    let skipped = 0;
-    let skippedReason = {
-      round: 0,
-      fixtureId: 0,
-      date: 0,
-      teams: 0,
-    };
-
-    if (fixtures.length === 0) {
+    if (
+      fixtures.length ===
+      0
+    ) {
       return {
         success: true,
         imported: 0,
-        message:
-          'No se encontraron partidos para la temporada indicada.',
+        updated: 0,
+        matchdaysCreated: 0,
+        skipped: 0,
+        total: 0,
+        fixturesReceived: 0,
         leagueId,
         season,
       };
@@ -237,23 +423,36 @@ export class FootballApiService {
 
     let imported = 0;
     let updated = 0;
-    let matchdaysCreated = 0;
+    let matchdaysCreated =
+      0;
 
-    /*
-     * Estados considerados como partido terminado
-     */
+    let skipped = 0;
+
+    const skippedReason = {
+      round: 0,
+      fixtureId: 0,
+      date: 0,
+      teams: 0,
+    };
+
     const finishedStatuses = [
       'FT',
       'AET',
       'PEN',
     ];
 
-    for (const fixture of fixtures) {
-      const fixtureId = fixture.fixture?.id;
+    for (
+      const fixture of
+        fixtures
+    ) {
+      const fixtureId =
+        fixture.fixture?.id;
 
       const fixtureDate =
         fixture.fixture?.date
-          ? new Date(fixture.fixture.date)
+          ? new Date(
+              fixture.fixture.date,
+            )
           : null;
 
       const homeTeamId =
@@ -263,206 +462,170 @@ export class FootballApiService {
         fixture.teams?.away?.id;
 
       const homeScore =
-        fixture.goals?.home ?? null;
+        fixture.goals?.home ??
+        null;
 
       const awayScore =
-        fixture.goals?.away ?? null;
+        fixture.goals?.away ??
+        null;
 
       const status =
-        fixture.fixture?.status?.short;
+        fixture.fixture
+          ?.status?.short;
 
       const finished =
-        finishedStatuses.includes(status);
+        finishedStatuses.includes(
+          status,
+        );
 
       const round =
         String(
           fixture.league?.round ??
-          'Regular Season',
+            'Regular Season',
         ).trim();
 
-      /* const parsedRound =
-         this.parseRound(round);
- 
-       console.log(
-         'ROUND API:',
-         round,
-         'PARSED:',
-         parsedRound,
-       );
- 
-       if (
-         parsedRound.type !== 'REGULAR' ||
-         parsedRound.number === null
-       ) {
-         continue;
-       }*/
-
-      const parsedRound =
-        this.parseRound(round);
-
-      console.log(
-        'ROUND API:',
-        JSON.stringify(round),
-        'PARSED:',
-        parsedRound,
-      );
+      if (
+        !fixtureId
+      ) {
+        skipped++;
+        skippedReason.fixtureId++;
+        continue;
+      }
 
       if (
-        parsedRound.type !== 'REGULAR' ||
-        parsedRound.number === null
+        !fixtureDate ||
+        Number.isNaN(
+          fixtureDate.getTime(),
+        )
+      ) {
+        skipped++;
+        skippedReason.date++;
+        continue;
+      }
+
+      if (
+        !homeTeamId ||
+        !awayTeamId
+      ) {
+        skipped++;
+        skippedReason.teams++;
+        continue;
+      }
+
+      const parsedRound =
+        this.parseRound(
+          round,
+        );
+
+      if (
+        parsedRound.type !==
+          'REGULAR' ||
+        parsedRound.number ===
+          null
       ) {
         skipped++;
         skippedReason.round++;
-
-        console.log(
-          'FIXTURE DESCARTADO POR ROUND:',
-          {
-            fixtureId,
-            round,
-            parsedRound,
-          },
-        );
-
         continue;
       }
 
-      /*
-       * Validaciones básicas
-      
-      if (!fixtureId) {
-        continue;
-      }
-
-      if (!fixtureDate) {
-        continue;
-      }
-
-      if (!homeTeamId || !awayTeamId) {
-        continue;
-      } */
-      if (!fixtureId) {
-        console.log('DESCARTADO: fixtureId');
-        continue;
-      }
-
-      if (!fixtureDate) {
-        console.log(
-          'DESCARTADO: fixtureDate',
-          fixture,
-        );
-        continue;
-      }
-
-      if (!homeTeamId || !awayTeamId) {
-        console.log(
-          'DESCARTADO: equipos',
-          {
-            fixtureId,
-            homeTeamId,
-            awayTeamId,
-          },
-        );
-        continue;
-      }
-      /*
-       * Verificar que los equipos existan.
-       */
-      const [homeTeam, awayTeam] =
+      const [
+        homeTeam,
+        awayTeam,
+      ] =
         await Promise.all([
           this.prisma.team.findUnique({
             where: {
-              id: homeTeamId,
+              id:
+                homeTeamId,
             },
           }),
 
           this.prisma.team.findUnique({
             where: {
-              id: awayTeamId,
+              id:
+                awayTeamId,
             },
           }),
         ]);
-      /*
-            if (!homeTeam || !awayTeam) {
-              console.warn(
-                `Partido ${fixtureId} omitido: equipos no encontrados.`,
-              );
-      
-              continue;
-            }*/
 
-      if (!homeTeam || !awayTeam) {
-        console.warn(
-          'PARTIDO DESCARTADO: EQUIPO NO ENCONTRADO',
-          {
-            fixtureId,
-            homeTeamId,
-            awayTeamId,
-            homeExists: !!homeTeam,
-            awayExists: !!awayTeam,
-          },
-        );
-
+      if (
+        !homeTeam ||
+        !awayTeam
+      ) {
+        skipped++;
+        skippedReason.teams++;
         continue;
       }
 
-      /*
-       * Buscar jornada existente.
-       */
       let matchday =
         await this.prisma.matchday.findFirst({
           where: {
             leagueId,
             season,
-            tournament: 'Liga MX',
-            roundName: parsedRound.name,
+            tournament:
+              'Liga MX',
+
+            roundName:
+              parsedRound.name,
           },
         });
 
-      /*
-       * Crear jornada si no existe.
-       */
-      if (!matchday) {
+      if (
+        !matchday
+      ) {
         matchday =
           await this.prisma.matchday.create({
             data: {
               leagueId,
-              number: parsedRound.number,
-              tournament: 'Liga MX',
-              roundName: parsedRound.name,
+
+              number:
+                parsedRound.number,
+
+              tournament:
+                'Liga MX',
+
+              roundName:
+                parsedRound.name,
+
               season,
-              startDate: fixtureDate,
-              endDate: fixtureDate,
+
+              startDate:
+                fixtureDate,
+
+              endDate:
+                fixtureDate,
+
               active: false,
             },
           });
 
         matchdaysCreated++;
       } else {
-
-        /*
-         * Actualizar rango de fechas de la jornada.
-         */
         const startDate =
-          fixtureDate < matchday.startDate
+          fixtureDate <
+          matchday.startDate
             ? fixtureDate
             : matchday.startDate;
 
         const endDate =
-          fixtureDate > matchday.endDate
+          fixtureDate >
+          matchday.endDate
             ? fixtureDate
             : matchday.endDate;
 
         if (
           startDate.getTime() !==
-          matchday.startDate.getTime() ||
+            matchday.startDate.getTime() ||
           endDate.getTime() !==
-          matchday.endDate.getTime()
+            matchday.endDate.getTime()
         ) {
           matchday =
             await this.prisma.matchday.update({
               where: {
-                id: matchday.id,
+                id:
+                  matchday.id,
               },
+
               data: {
                 startDate,
                 endDate,
@@ -471,72 +634,81 @@ export class FootballApiService {
         }
       }
 
-      /*
-       * Crear o actualizar partido.
-       */
       const existingMatch =
         await this.prisma.match.findUnique({
           where: {
-            apiId: fixtureId,
+            apiId:
+              fixtureId,
           },
         });
+
       const savedMatch =
         await this.prisma.match.upsert({
           where: {
-            apiId: fixtureId,
+            apiId:
+              fixtureId,
           },
 
           update: {
-            date: fixtureDate,
+            date:
+              fixtureDate,
+
             homeScore,
             awayScore,
+
             finished,
+
             homeTeamId,
             awayTeamId,
-            matchdayId: matchday.id,
+
+            matchdayId:
+              matchday.id,
+
             leagueId,
           },
 
           create: {
-            apiId: fixtureId,
-            date: fixtureDate,
+            apiId:
+              fixtureId,
+
+            date:
+              fixtureDate,
+
             homeScore,
             awayScore,
+
             finished,
+
             homeTeamId,
             awayTeamId,
-            matchdayId: matchday.id,
+
+            matchdayId:
+              matchday.id,
+
             leagueId,
           },
         });
 
       if (
         savedMatch.finished &&
-        savedMatch.homeScore !== null &&
-        savedMatch.awayScore !== null
+        savedMatch.homeScore !==
+          null &&
+        savedMatch.awayScore !==
+          null
       ) {
         await this.scoringService.scoreMatch(
           savedMatch.id,
         );
       }
 
-      if (existingMatch) {
+      if (
+        existingMatch
+      ) {
         updated++;
       } else {
         imported++;
       }
     }
-    /*
-        return {
-          success: true,
-          imported,
-          updated,
-          matchdaysCreated,
-          total: imported + updated,
-          leagueId,
-          season,
-        };
-      }*/
 
     return {
       success: true,
@@ -545,8 +717,13 @@ export class FootballApiService {
       matchdaysCreated,
       skipped,
       skippedReason,
-      total: imported + updated,
-      fixturesReceived: fixtures.length,
+      total:
+        imported +
+        updated,
+
+      fixturesReceived:
+        fixtures.length,
+
       leagueId,
       season,
     };
@@ -556,59 +733,62 @@ export class FootballApiService {
     leagueId: number,
     season: number,
   ) {
-    const response = await this.client.get(
-      '/fixtures',
-      {
-        league: leagueId,
-        season,
-      },
-    );
+    /**
+     * IMPORTANTE:
+     *
+     * API-Sports Free no permite consultar
+     * Liga MX 2026.
+     *
+     * Para Liga MX 2026 usamos ESPN.
+     */
+    if (
+      leagueId === 262 &&
+      season === 2026
+    ) {
+      return this.espnFootballService
+        .importUpcomingMatches();
+    }
+
+    const response =
+      await this.client.get(
+        '/fixtures',
+        {
+          league: leagueId,
+          season,
+        },
+      );
 
     if (
       response.errors &&
-      Object.keys(response.errors).length > 0
+      Object.keys(
+        response.errors,
+      ).length > 0
     ) {
       throw new BadRequestException({
-        message: 'Error al consultar API-Sports.',
-        errors: response.errors,
+        message:
+          'Error al consultar API-Sports.',
+
+        errors:
+          response.errors,
+
         leagueId,
         season,
       });
     }
 
-    console.log('======================================');
-    console.log('API-Sports /fixtures');
-    console.log('League:', leagueId);
-    console.log('Season:', season);
-    console.log('Results:', response.results);
-    console.log('Errors:', response.errors);
-    console.log('Response length:', response.response?.length);
-    console.log('======================================');
+    const fixtures =
+      response.response ?? [];
 
-    const fixtures = response.response ?? [];
-
-    console.log('==============================');
-    console.log('IMPORT MATCHES DEBUG');
-    console.log('League:', leagueId);
-    console.log('Season:', season);
-    console.log('API results:', response.results);
-    console.log('API errors:', response.errors);
-    console.log('Fixtures recibidos:', fixtures.length);
-
-    if (fixtures.length > 0) {
-      console.log('Primer fixture:');
-      console.dir(fixtures[0], { depth: null });
-    }
-
-    console.log('==============================');
-
-    if (fixtures.length === 0) {
+    if (
+      fixtures.length ===
+      0
+    ) {
       return {
         success: true,
         updated: 0,
         scored: 0,
-        message:
-          'No se encontraron partidos.',
+        ignored: 0,
+        total: 0,
         leagueId,
         season,
       };
@@ -624,11 +804,16 @@ export class FootballApiService {
     let scored = 0;
     let ignored = 0;
 
-    for (const fixture of fixtures) {
+    for (
+      const fixture of
+        fixtures
+    ) {
       const fixtureId =
         fixture.fixture?.id;
 
-      if (!fixtureId) {
+      if (
+        !fixtureId
+      ) {
         ignored++;
         continue;
       }
@@ -636,42 +821,53 @@ export class FootballApiService {
       const existingMatch =
         await this.prisma.match.findUnique({
           where: {
-            apiId: fixtureId,
+            apiId:
+              fixtureId,
           },
         });
 
-      if (!existingMatch) {
+      if (
+        !existingMatch
+      ) {
         ignored++;
         continue;
       }
 
       const homeScore =
-        fixture.goals?.home ?? null;
+        fixture.goals?.home ??
+        null;
 
       const awayScore =
-        fixture.goals?.away ?? null;
+        fixture.goals?.away ??
+        null;
 
       const status =
-        fixture.fixture?.status?.short;
+        fixture.fixture
+          ?.status?.short;
 
       const finished =
-        finishedStatuses.includes(status);
+        finishedStatuses.includes(
+          status,
+        );
 
       const fixtureDate =
         fixture.fixture?.date
           ? new Date(
-            fixture.fixture.date,
-          )
+              fixture.fixture.date,
+            )
           : existingMatch.date;
 
       const match =
         await this.prisma.match.update({
           where: {
-            id: existingMatch.id,
+            id:
+              existingMatch.id,
           },
 
           data: {
-            date: fixtureDate,
+            date:
+              fixtureDate,
+
             homeScore,
             awayScore,
             finished,
@@ -682,8 +878,10 @@ export class FootballApiService {
 
       if (
         finished &&
-        homeScore !== null &&
-        awayScore !== null
+        homeScore !==
+          null &&
+        awayScore !==
+          null
       ) {
         await this.scoringService.scoreMatch(
           match.id,
@@ -693,20 +891,21 @@ export class FootballApiService {
       }
     }
 
-
-
     return {
       success: true,
       updated,
       scored,
       ignored,
-      total: fixtures.length,
+      total:
+        fixtures.length,
       leagueId,
       season,
     };
   }
 
-  private parseRound(round: string) {
+  private parseRound(
+    round: string,
+  ) {
     if (!round) {
       return {
         type: 'OTHER',
@@ -716,40 +915,40 @@ export class FootballApiService {
       };
     }
 
-    const normalized = round.trim();
+    const normalized =
+      round.trim();
 
-    /**
-     * FORMATO API:
-     * Apertura - 1
-     * Apertura - 2
-     * ...
-     * Clausura - 1
-     * Clausura - 2
-     * ...
-     */
-    const regularMatch = normalized.match(
-      /^(Apertura|Clausura)\s*-\s*(\d+)$/i,
-    );
+    const regularMatch =
+      normalized.match(
+        /^(Apertura|Clausura)\s*-\s*(\d+)$/i,
+      );
 
-    if (regularMatch) {
+    if (
+      regularMatch
+    ) {
       const phase =
-        regularMatch[1].toLowerCase() === 'apertura'
+        regularMatch[1]
+          .toLowerCase() ===
+        'apertura'
           ? 'APERTURA'
           : 'CLAUSURA';
 
-      const number = Number(regularMatch[2]);
-
       return {
-        type: 'REGULAR',
-        number,
-        name: normalized,
+        type:
+          'REGULAR',
+
+        number:
+          Number(
+            regularMatch[2],
+          ),
+
+        name:
+          normalized,
+
         phase,
       };
     }
 
-    /**
-     * PLAYOFFS
-     */
     const playoffKeywords = [
       'final',
       'semi-final',
@@ -767,26 +966,44 @@ export class FootballApiService {
       'reclasificación',
     ];
 
-    const lower = normalized.toLowerCase();
+    const lower =
+      normalized.toLowerCase();
 
     if (
-      playoffKeywords.some((keyword) =>
-        lower.includes(keyword),
+      playoffKeywords.some(
+        (keyword) =>
+          lower.includes(
+            keyword,
+          ),
       )
     ) {
       return {
-        type: 'PLAYOFF',
-        number: null,
-        name: normalized,
-        phase: null,
+        type:
+          'PLAYOFF',
+
+        number:
+          null,
+
+        name:
+          normalized,
+
+        phase:
+          null,
       };
     }
 
     return {
-      type: 'OTHER',
-      number: null,
-      name: normalized,
-      phase: null,
+      type:
+        'OTHER',
+
+      number:
+        null,
+
+      name:
+        normalized,
+
+      phase:
+        null,
     };
   }
 
@@ -794,18 +1011,22 @@ export class FootballApiService {
     fixtureDate: Date,
     season: number,
   ): string {
-    if (season !== 2024) {
+    if (
+      season !==
+      2024
+    ) {
       throw new BadRequestException(
         `No existe una regla configurada para Liga MX season ${season}`,
       );
     }
 
-    const month = fixtureDate.getUTCMonth() + 1;
+    const month =
+      fixtureDate.getUTCMonth() +
+      1;
 
-    if (month >= 7 && month <= 12) {
-      return 'Apertura';
-    }
-
-    return 'Clausura';
+    return month >= 7 &&
+      month <= 12
+      ? 'Apertura'
+      : 'Clausura';
   }
 }
