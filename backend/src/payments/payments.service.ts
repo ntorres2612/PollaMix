@@ -53,7 +53,10 @@ export class PaymentsService {
     }
 
     // 4. Validar monto
-    if (dto.amount !== tournament.inscription) {
+    if (
+      dto.amount !==
+      tournament.inscription
+    ) {
       throw new BadRequestException(
         `El valor de la inscripción es ${tournament.inscription}.`,
       );
@@ -64,7 +67,8 @@ export class PaymentsService {
       await this.prisma.tournamentParticipant.findUnique({
         where: {
           tournamentId_userId: {
-            tournamentId: dto.tournamentId,
+            tournamentId:
+              dto.tournamentId,
             userId,
           },
         },
@@ -76,12 +80,16 @@ export class PaymentsService {
       );
     }
 
-    // 6. Verificar si ya existe un pago pendiente o aprobado
+    // 6. Verificar si ya existe un pago
+    // pendiente o aprobado
     const existingPayment =
       await this.prisma.payment.findFirst({
         where: {
-          tournamentId: dto.tournamentId,
+          tournamentId:
+            dto.tournamentId,
+
           userId,
+
           status: {
             in: [
               'PENDING',
@@ -101,22 +109,29 @@ export class PaymentsService {
     return this.prisma.payment.create({
       data: {
         amount: dto.amount,
-        reference: dto.reference,
-        status: 'PENDING',
-        method: dto.method,
+
+        reference:
+          dto.reference,
+
+        status:
+          'PENDING',
+
+        method:
+          dto.method,
 
         userId,
 
-        tournamentId: dto.tournamentId,
+        tournamentId:
+          dto.tournamentId,
 
-        participantId: participant.id,
+        participantId:
+          participant.id,
       },
 
       include: {
         tournament: true,
 
         participant: true,
-
       },
     });
   }
@@ -142,6 +157,62 @@ export class PaymentsService {
       orderBy: {
         createdAt: 'desc',
       },
+
+    });
+  }
+
+  /**
+   * Consultar pagos de un torneo.
+   *
+   * Uso exclusivo de administradores.
+   */
+  async findByTournament(
+    tournamentId: number,
+  ) {
+
+    const tournament =
+      await this.prisma.tournament.findUnique({
+        where: {
+          id: tournamentId,
+        },
+      });
+
+    if (!tournament) {
+      throw new NotFoundException(
+        'El torneo no existe.',
+      );
+    }
+
+    return this.prisma.payment.findMany({
+
+      where: {
+        tournamentId,
+      },
+
+      include: {
+
+        participant: true,
+
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+
+      },
+
+      orderBy: [
+        {
+          createdAt:
+            'desc',
+        },
+        {
+          id:
+            'desc',
+        },
+      ],
 
     });
   }
@@ -181,8 +252,12 @@ export class PaymentsService {
   /**
    * Actualizar estado del pago.
    *
-   * Esta operación posteriormente deberá
-   * quedar restringida a ADMIN.
+   * Estados permitidos:
+   *
+   * PENDING
+   * APPROVED
+   * REJECTED
+   * CANCELLED
    */
   async updateStatus(
     id: number,
@@ -196,7 +271,11 @@ export class PaymentsService {
       'CANCELLED',
     ];
 
-    if (!validStatuses.includes(dto.status)) {
+    if (
+      !validStatuses.includes(
+        dto.status,
+      )
+    ) {
       throw new BadRequestException(
         'Estado de pago no válido.',
       );
@@ -204,9 +283,11 @@ export class PaymentsService {
 
     const payment =
       await this.prisma.payment.findUnique({
+
         where: {
           id,
         },
+
       });
 
     if (!payment) {
@@ -215,45 +296,72 @@ export class PaymentsService {
       );
     }
 
+    /*
+     * Si el pago es aprobado,
+     * registramos la fecha de pago.
+     *
+     * Para REJECTED y CANCELLED
+     * no existe fecha de pago.
+     */
     const paidAt =
       dto.status === 'APPROVED'
         ? new Date()
         : null;
 
+    /*
+     * Actualizar el pago y,
+     * en la misma transacción,
+     * sincronizar el estado
+     * del participante.
+     */
     const updated =
-      await this.prisma.payment.update({
+      await this.prisma.$transaction(
+        async (tx) => {
 
-        where: {
-          id,
+          const paymentUpdated =
+            await tx.payment.update({
+
+              where: {
+                id,
+              },
+
+              data: {
+
+                status:
+                  dto.status,
+
+                paidAt,
+
+              },
+
+            });
+
+          if (
+            payment.participantId
+          ) {
+
+            await tx.tournamentParticipant.update({
+
+              where: {
+                id:
+                  payment.participantId,
+              },
+
+              data: {
+
+                paid:
+                  dto.status ===
+                  'APPROVED',
+
+              },
+
+            });
+
+          }
+
+          return paymentUpdated;
         },
-
-        data: {
-          status: dto.status,
-          paidAt,
-        },
-
-      });
-
-    // Si el pago fue aprobado,
-    // confirmar la inscripción.
-    if (
-      dto.status === 'APPROVED' &&
-      payment.participantId
-    ) {
-
-      await this.prisma.tournamentParticipant.update({
-
-        where: {
-          id: payment.participantId,
-        },
-
-        data: {
-          paid: true,
-        },
-
-      });
-
-    }
+      );
 
     return updated;
   }

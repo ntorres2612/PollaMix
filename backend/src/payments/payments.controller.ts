@@ -21,7 +21,6 @@ import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
 
 @Controller('payments')
 export class PaymentsController {
-
   constructor(
     private readonly paymentsService: PaymentsService,
   ) {}
@@ -35,7 +34,6 @@ export class PaymentsController {
     @CurrentUser() user: any,
     @Body() dto: CreatePaymentDto,
   ) {
-
     return this.paymentsService.create(
       user.id,
       dto,
@@ -50,9 +48,27 @@ export class PaymentsController {
   findMyPayments(
     @CurrentUser() user: any,
   ) {
-
     return this.paymentsService.findMyPayments(
       user.id,
+    );
+  }
+
+  /**
+   * Pagos de un torneo.
+   *
+   * Uso exclusivo de administradores.
+   */
+  @Get('tournament/:tournamentId')
+  @UseGuards(
+    JwtAuthGuard,
+    RolesGuard,
+  )
+  @Roles('ADMIN')
+  findByTournament(
+    @Param('tournamentId') tournamentId: string,
+  ) {
+    return this.paymentsService.findByTournament(
+      Number(tournamentId),
     );
   }
 
@@ -65,7 +81,6 @@ export class PaymentsController {
     @Param('id') id: string,
     @CurrentUser() user: any,
   ) {
-
     return this.paymentsService.findOne(
       Number(id),
       user.id,
@@ -85,7 +100,6 @@ export class PaymentsController {
     @Param('id') id: string,
     @Body() dto: UpdatePaymentStatusDto,
   ) {
-
     return this.paymentsService.updateStatus(
       Number(id),
       dto,
