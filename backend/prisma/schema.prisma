@@ -131,7 +131,8 @@ model Match {
   date      DateTime
   homeScore Int?
   awayScore Int?
-  finished  Boolean  @default(false)
+  finished  Boolean   @default(false)
+  scoredAt  DateTime?
 
   createdAt DateTime @default(now())
 

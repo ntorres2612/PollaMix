@@ -11,7 +11,7 @@ import { calculateScore } from '../../common/utils/score-calculator';
 export class ScoringService {
   constructor(
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   /**
    * Calcula y actualiza los puntos de todos los
@@ -68,13 +68,17 @@ export class ScoringService {
     // --------------------------------------------------
 
     if (match.predictions.length === 0) {
+      await this.prisma.match.update({
+        where: { id: match.id },
+        data: { scoredAt: new Date() },
+      });
+
       return {
         success: true,
         matchId: match.id,
         predictions: 0,
         scored: 0,
-        message:
-          'El partido no tiene pronósticos para calificar.',
+        message: 'El partido no tiene pronósticos para calificar.',
       };
     }
 
@@ -103,6 +107,11 @@ export class ScoringService {
 
       scored++;
     }
+
+    await this.prisma.match.update({
+      where: { id: match.id },
+      data: { scoredAt: new Date() },
+    });
 
     // --------------------------------------------------
     // 6. Resultado
