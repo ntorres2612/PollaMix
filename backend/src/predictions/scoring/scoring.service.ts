@@ -1,3 +1,4 @@
+
 import {
   Injectable,
   NotFoundException,
@@ -11,20 +12,16 @@ import { calculateScore } from '../../common/utils/score-calculator';
 export class ScoringService {
   constructor(
     private readonly prisma: PrismaService,
-  ) { }
+  ) {}
 
   /**
    * Calcula y actualiza los puntos de todos los
    * pronósticos asociados a un partido.
    *
-   * Este método puede ejecutarse varias veces sobre
-   * el mismo partido sin generar puntos duplicados.
+   * Puede ejecutarse varias veces sin duplicar puntos.
    */
   async scoreMatch(matchId: number) {
-    // --------------------------------------------------
-    // 1. Buscar partido
-    // --------------------------------------------------
-
+    // 1. Buscar el partido y sus pronósticos.
     const match = await this.prisma.match.findUnique({
       where: {
         id: matchId,
@@ -40,10 +37,7 @@ export class ScoringService {
       );
     }
 
-    // --------------------------------------------------
-    // 2. Verificar resultado
-    // --------------------------------------------------
-
+    // 2. Verificar que exista un marcador.
     if (
       match.homeScore === null ||
       match.awayScore === null
@@ -53,24 +47,23 @@ export class ScoringService {
       );
     }
 
-    // --------------------------------------------------
-    // 3. Verificar que el partido haya terminado
-    // --------------------------------------------------
-
+    // 3. Verificar que el partido haya terminado.
     if (!match.finished) {
       throw new BadRequestException(
         'El partido todavía no ha terminado.',
       );
     }
 
-    // --------------------------------------------------
-    // 4. Si no existen pronósticos
-    // --------------------------------------------------
-
+    // 4. Si no hay pronósticos, registrar la puntuación
+    // y devolver igualmente el marcador oficial.
     if (match.predictions.length === 0) {
       await this.prisma.match.update({
-        where: { id: match.id },
-        data: { scoredAt: new Date() },
+        where: {
+          id: match.id,
+        },
+        data: {
+          scoredAt: new Date(),
+        },
       });
 
       return {
@@ -78,14 +71,16 @@ export class ScoringService {
         matchId: match.id,
         predictions: 0,
         scored: 0,
-        message: 'El partido no tiene pronósticos para calificar.',
+        result: {
+          homeScore: match.homeScore,
+          awayScore: match.awayScore,
+        },
+        message:
+          'El partido no tiene pronósticos para calificar.',
       };
     }
 
-    // --------------------------------------------------
-    // 5. Calcular y actualizar puntos
-    // --------------------------------------------------
-
+    // 5. Calcular y actualizar los puntos.
     let scored = 0;
 
     for (const prediction of match.predictions) {
@@ -108,15 +103,17 @@ export class ScoringService {
       scored++;
     }
 
+    // 6. Registrar cuándo terminó la puntuación.
     await this.prisma.match.update({
-      where: { id: match.id },
-      data: { scoredAt: new Date() },
+      where: {
+        id: match.id,
+      },
+      data: {
+        scoredAt: new Date(),
+      },
     });
 
-    // --------------------------------------------------
-    // 6. Resultado
-    // --------------------------------------------------
-
+    // 7. Devolver una respuesta consistente.
     return {
       success: true,
       matchId: match.id,
