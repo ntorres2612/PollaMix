@@ -1,63 +1,16 @@
 export function calculateScore(
-
   predictionHome: number,
-
   predictionAway: number,
-
   resultHome: number,
-
   resultAway: number,
-
 ): number {
+  const predictionDifference = predictionHome - predictionAway;
+  const resultDifference = resultHome - resultAway;
 
-  // Marcador exacto
-  if (
+  const predictionResult = Math.sign(predictionDifference);
+  const actualResult = Math.sign(resultDifference);
 
-    predictionHome === resultHome &&
-    predictionAway === resultAway
-
-  ) {
-
-    return 5;
-
-  }
-
-  const predictionDifference =
-    predictionHome - predictionAway;
-
-  const resultDifference =
-    resultHome - resultAway;
-
-  // Diferencia exacta
-  if (
-
-    predictionDifference === resultDifference
-
-  ) {
-
-    return 4;
-
-  }
-
-  const predictionWinner =
-    Math.sign(predictionDifference);
-
-  const resultWinner =
-    Math.sign(resultDifference);
-
-  // Ganador correcto
-  if (
-
-    predictionWinner === resultWinner
-
-  ) {
-
-    return 3;
-
-  }
-
-  // No acertó
-
-  return 0;
-
+  // 1 punto por acertar local, empate o visitante.
+  return predictionResult === actualResult ? 1 : 0;
 }
+
