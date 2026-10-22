@@ -1,31 +1,43 @@
+
 "use client";
 
 import { usePredictionContext } from "@/context/PredictionContext";
 
-export default function PredictionProgress() {
+interface PredictionProgressProps {
+  tournamentId: number;
+  predictionsSubmittedAt?: string | null;
+}
 
-    const {predictions}=usePredictionContext();
+export default function PredictionProgress({
+  tournamentId,
+  predictionsSubmittedAt = null,
+}: PredictionProgressProps) {
+  const { predictions } = usePredictionContext();
 
-    const total=Object.keys(predictions).length;
+  const savedCount = Object.values(predictions).filter(
+    (prediction) =>
+      prediction.tournamentId === tournamentId,
+  ).length;
 
-    return(
+  const confirmed = Boolean(predictionsSubmittedAt);
 
-<div className="bg-red-600 rounded-xl p-6 text-center my-16">
+  const total = confirmed ? 10 : savedCount;
 
-<h2 className="text-3xl font-black">
+  return (
+    <div className="my-16 rounded-xl bg-red-600 p-6 text-center">
+      <h2 className="text-3xl font-black">
+        Pronósticos realizados
+      </h2>
 
-Pronósticos realizados
+      <p className="mt-5 text-5xl font-black">
+        {total} / 10
+      </p>
 
-</h2>
-
-<p className="text-5xl mt-5">
-
-{total} / 14
-
-</p>
-
-</div>
-
-    )
-
+      {confirmed && (
+        <p className="mt-3 text-sm font-semibold text-white">
+          ✓ Pronósticos confirmados definitivamente
+        </p>
+      )}
+    </div>
+  );
 }

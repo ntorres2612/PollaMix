@@ -1,17 +1,32 @@
-import { Match } from "@/types/match";
+
+import { ApiMatch } from "@/types/match";
+import type { PredictionSelection } from "@/lib/predictions";
 import MatchCard from "./MatchCard";
 
 interface Props {
-  week: number;
-  matches: Match[];
+  week: string;
+  matches: ApiMatch[];
+  tournamentId: number;
+  selections: Record<number, PredictionSelection>;
+  onSelectionChange: (
+    matchId: number,
+    selection: PredictionSelection,
+  ) => void;
+  canPredict: boolean;
 }
 
-export default function MatchWeek({ week, matches }: Props) {
+export default function MatchWeek({
+  week,
+  matches,
+  tournamentId,
+  selections,
+  onSelectionChange,
+  canPredict,
+}: Props) {
   return (
     <section className="mb-16">
-
-      <h2 className="text-3xl font-black mb-8">
-        Jornada {week}
+      <h2 className="mb-8 text-3xl font-black">
+        {week}
       </h2>
 
       <div className="space-y-5">
@@ -19,10 +34,13 @@ export default function MatchWeek({ week, matches }: Props) {
           <MatchCard
             key={match.id}
             match={match}
+            tournamentId={tournamentId}
+            selection={selections[match.id] ?? null}
+            onSelectionChange={onSelectionChange}
+            canPredict={canPredict}
           />
         ))}
       </div>
-
     </section>
   );
 }

@@ -1,43 +1,43 @@
 import Image from "next/image";
+import Link from "next/link";
+
 import Navbar from "./Navbar";
 
 export default function Header() {
   return (
-    <header className="fixed top-0 left-0 w-full z-50 bg-slate-950/80 backdrop-blur-lg border-b border-slate-800">
-
-      <div className="max-w-7xl mx-auto px-6">
-
-        <div className="flex justify-between items-center h-20">
-
-          <div className="flex items-center gap-4">
-
-            <Image
-              src="/logos/polla-mix-logo.png"
-              alt="PollaMix"
-              width={155}
-              height={155}
-            />
+    <header className="fixed left-0 top-0 z-50 w-full border-b border-slate-800 bg-slate-950/90 backdrop-blur-xl">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <div className="flex h-20 items-center justify-between">
+          {/* Logo + identidad */}
+          <Link
+            href="/"
+            className="flex items-center gap-3 transition-opacity hover:opacity-90"
+          >
+            <div className="relative h-14 w-14 shrink-0 sm:h-16 sm:w-16">
+              <Image
+                src="/logos/polla-mix-logo.png"
+                alt="PollaMix"
+                fill
+                priority
+                sizes="64px"
+                className="object-contain"
+              />
+            </div>
 
             <div>
-
-              <h1 className="text-2xl font-black">
+              <h1 className="text-xl font-black text-white sm:text-2xl">
                 PollaMix
               </h1>
 
-              <p className="text-slate-400 text-sm">
+              <p className="text-xs text-slate-400 sm:text-sm">
                 Liga MX
               </p>
-
             </div>
-
-          </div>
+          </Link>
 
           <Navbar />
-
         </div>
-
       </div>
-
     </header>
   );
 }
