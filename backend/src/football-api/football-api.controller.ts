@@ -25,11 +25,15 @@ export class FootballApiController {
   }
 
   @Post('import/leagues')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   importLeagues() {
     return this.footballApiService.importLeagues();
   }
 
   @Post('import/teams/:leagueId/:season')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   importTeams(
     @Param('leagueId') leagueId: string,
     @Param('season') season: string,
@@ -41,6 +45,8 @@ export class FootballApiController {
   }
 
   @Post('import/matches/:leagueId/:season')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   importMatches(
     @Param('leagueId') leagueId: string,
     @Param('season') season: string,

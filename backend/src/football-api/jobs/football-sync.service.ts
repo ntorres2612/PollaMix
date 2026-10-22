@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 import { FootballApiService } from '../football-api.service';
 import { EspnFootballService } from '../espn/espn-football.service';
@@ -23,7 +22,6 @@ export class FootballSyncService {
    *   datos históricos/pruebas existentes.
    * - ESPN 2026 para la PollaMix actual.
    */
-  @Cron('*/15 * * * *')
   async updateResults() {
     this.logger.log(
       '========================================',

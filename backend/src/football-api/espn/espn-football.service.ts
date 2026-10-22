@@ -17,6 +17,7 @@ export class EspnFootballService {
 
   private readonly leagueId = 262;
   private readonly season = 2026;
+  private syncInProgress = false;
 
   /**
    * Mapeo:
@@ -280,6 +281,16 @@ export class EspnFootballService {
   async importUpcomingMatches(
     dates?: string,
   ) {
+    if (this.syncInProgress) {
+      return {
+        success: false, skippedSync: true, source: 'ESPN',
+        leagueId: this.leagueId, season: this.season,
+        dates: dates ?? null, eventsReceived: 0, created: 0,
+        updated: 0, skipped: 0, scored: 0, predictionsScored: 0,
+      };
+    }
+    this.syncInProgress = true;
+    try {
     const syncDates =
       dates ?? this.getDefaultSyncRange();
 
@@ -527,8 +538,16 @@ export class EspnFootballService {
          * Actualizar Match existente.
          */
         if (existingMatch) {
+          if (existingMatch.finished &&
+              ( !completed || homeScore === null || awayScore === null )) {
+            skipped++;
+            this.logger.warn(`ESPN: resultado incompleto para partido finalizado ${existingMatch.id}; se conserva.`);
+            continue;
+          }
+          const { match, scoringResult } = await this.prisma.$transaction(
+            async (tx) => {
           const match =
-            await this.prisma.match.update({
+            await tx.match.update({
               where: {
                 id:
                   existingMatch.id,
@@ -562,37 +581,30 @@ export class EspnFootballService {
               },
             });
 
+              const scoringResult =
+                match.finished &&
+                match.homeScore !== null &&
+                match.awayScore !== null
+                  ? await this.scoringService.scoreMatchInTransaction(tx, match.id)
+                  : null;
+
+              return { match, scoringResult };
+            },
+            { timeout: 20000 },
+          );
+
           updated++;
 
           this.logger.log(
-            `Match ${match.id} actualizado desde ESPN. ` +
-              `Jornada ${matchday.number}.`,
+            `Match ${match.id} actualizado desde ESPN. Jornada ${matchday.number}.`,
           );
 
-          if (
-            match.finished &&
-            match.homeScore !==
-              null &&
-            match.awayScore !==
-              null
-          ) {
-            const scoringResult =
-              await this.scoringService.scoreMatch(
-                match.id,
-              );
-
+          if (scoringResult) {
             scored++;
-
-            predictionsScored +=
-              scoringResult.scored ??
-              0;
-
+            predictionsScored += scoringResult.scored ?? 0;
             this.logger.log(
               `Match ${match.id} sincronizado y calificado. ` +
-                `Predicciones actualizadas: ${
-                  scoringResult.scored ??
-                  0
-                }`,
+              `Predicciones actualizadas: ${scoringResult.scored ?? 0}`,
             );
           }
 
@@ -602,32 +614,37 @@ export class EspnFootballService {
         /**
          * Crear Match nuevo.
          */
-        const newMatch =
-          await this.prisma.match.create({
-            data: {
-              apiId:
-                espnApiId,
+        const { newMatch, scoringResult } =
+          await this.prisma.$transaction(
+            async (tx) => {
+              const newMatch = await tx.match.create({
+                data: {
+                  apiId: espnApiId,
+                  date,
+                  homeScore,
+                  awayScore,
+                  finished: completed,
+                  homeTeamId,
+                  awayTeamId,
+                  matchdayId: matchday.id,
+                  leagueId: this.leagueId,
+                },
+              });
 
-              date,
+              const scoringResult =
+                newMatch.finished &&
+                newMatch.homeScore !== null &&
+                newMatch.awayScore !== null
+                  ? await this.scoringService.scoreMatchInTransaction(
+                      tx,
+                      newMatch.id,
+                    )
+                  : null;
 
-              homeScore,
-
-              awayScore,
-
-              finished:
-                completed,
-
-              homeTeamId,
-
-              awayTeamId,
-
-              matchdayId:
-                matchday.id,
-
-              leagueId:
-                this.leagueId,
+              return { newMatch, scoringResult };
             },
-          });
+            { timeout: 20000 },
+          );
 
         created++;
 
@@ -638,23 +655,9 @@ export class EspnFootballService {
             `${homeTeamId} vs ${awayTeamId}`,
         );
 
-        if (
-          newMatch.finished &&
-          newMatch.homeScore !==
-            null &&
-          newMatch.awayScore !==
-            null
-        ) {
-          const scoringResult =
-            await this.scoringService.scoreMatch(
-              newMatch.id,
-            );
-
+        if (scoringResult) {
           scored++;
-
-          predictionsScored +=
-            scoringResult.scored ??
-            0;
+          predictionsScored += scoringResult.scored ?? 0;
         }
       } catch (error) {
         skipped++;
@@ -685,6 +688,9 @@ export class EspnFootballService {
       scored,
       predictionsScored,
     };
+    } finally {
+      this.syncInProgress = false;
+    }
   }
 
   /**

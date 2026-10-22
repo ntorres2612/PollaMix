@@ -1,3 +1,4 @@
+
 import {
   Controller,
   Get,
@@ -10,8 +11,10 @@ import {
 } from '@nestjs/common';
 
 import { PredictionsService } from './predictions.service';
+
 import { CreatePredictionDto } from './dto/create-prediction.dto';
 import { UpdatePredictionDto } from './dto/update-prediction.dto';
+import { SubmitPredictionsDto } from './dto/submit-predictions.dto';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -25,6 +28,21 @@ export class PredictionsController {
     private readonly predictionsService: PredictionsService,
   ) {}
 
+  // Confirmar los 10 pronósticos definitivamente
+  @Post('submit')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('PLAYER')
+  submit(
+    @CurrentUser() user: any,
+    @Body() dto: SubmitPredictionsDto,
+  ) {
+    return this.predictionsService.submit(
+      user.id,
+      dto,
+    );
+  }
+
+  // Crear pronóstico individual (endpoint existente)
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('PLAYER')
@@ -38,9 +56,10 @@ export class PredictionsController {
     );
   }
 
+  // Consultar pronósticos propios
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('PLAYER')
+  @Roles('PLAYER', 'ADMIN')
   findAll(
     @CurrentUser() user: any,
   ) {
@@ -49,9 +68,10 @@ export class PredictionsController {
     );
   }
 
+  // Consultar un pronóstico propio
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('PLAYER')
+  @Roles('PLAYER', 'ADMIN')
   findOne(
     @CurrentUser() user: any,
     @Param('id') id: string,
@@ -62,6 +82,7 @@ export class PredictionsController {
     );
   }
 
+  // Actualizar pronóstico individual (endpoint existente)
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('PLAYER')
@@ -77,6 +98,7 @@ export class PredictionsController {
     );
   }
 
+  // Eliminar pronóstico individual (endpoint existente)
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('PLAYER')

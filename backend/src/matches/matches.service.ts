@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { ScoringService } from '../predictions/scoring/scoring.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMatchDto } from './dto/create-match.dto';
 import { UpdateMatchDto } from './dto/update-match.dto';
@@ -8,6 +9,7 @@ export class MatchesService {
 
   constructor(
     private prisma: PrismaService,
+    private readonly scoringService: ScoringService,
   ) { }
 
   create(dto: CreateMatchDto) {
@@ -100,66 +102,94 @@ export class MatchesService {
 
   }
 
-  update(id: number, dto: UpdateMatchDto) {
+  async update(id: number, dto: UpdateMatchDto) {
+    return this.prisma.$transaction(
+      async (tx) => {
+        // Serializa actualizaciones simultáneas del mismo partido.
+        await tx.$queryRaw`
+          SELECT id FROM "Match"
+          WHERE id = ${id}
+          FOR UPDATE
+        `;
 
-    return this.prisma.match.update({
+        const current = await tx.match.findUnique({
+          where: { id },
+        });
 
-      where: { id },
+        if (!current) {
+          throw new BadRequestException('Partido no encontrado.');
+        }
 
-      data: {
+        const homeScore = dto.homeScore ?? current.homeScore;
+        const awayScore = dto.awayScore ?? current.awayScore;
+        const finished = dto.finished ?? current.finished;
 
-        ...(dto.date && {
-          date: new Date(dto.date),
-        }),
+        if (
+          finished &&
+          (
+            homeScore === null ||
+            awayScore === null ||
+            homeScore < 0 ||
+            awayScore < 0
+          )
+        ) {
+          throw new BadRequestException(
+            'Un partido finalizado necesita un marcador válido.',
+          );
+        }
 
-        ...(dto.homeScore !== undefined && {
-          homeScore: dto.homeScore,
-        }),
-
-        ...(dto.awayScore !== undefined && {
-          awayScore: dto.awayScore,
-        }),
-
-        ...(dto.finished !== undefined && {
-          finished: dto.finished,
-        }),
-
-        ...(dto.homeTeamId && {
-          homeTeam: {
-            connect: {
-              id: dto.homeTeamId,
-            },
+        const updated = await tx.match.update({
+          where: { id },
+          data: {
+            ...(dto.date !== undefined && {
+              date: new Date(dto.date),
+            }),
+            ...(dto.homeScore !== undefined && {
+              homeScore: dto.homeScore,
+            }),
+            ...(dto.awayScore !== undefined && {
+              awayScore: dto.awayScore,
+            }),
+            ...(dto.finished !== undefined && {
+              finished: dto.finished,
+            }),
+            ...(dto.homeTeamId !== undefined && {
+              homeTeam: { connect: { id: dto.homeTeamId } },
+            }),
+            ...(dto.awayTeamId !== undefined && {
+              awayTeam: { connect: { id: dto.awayTeamId } },
+            }),
+            ...(dto.matchdayId !== undefined && {
+              matchday: { connect: { id: dto.matchdayId } },
+            }),
+            ...(dto.leagueId !== undefined && {
+              league: { connect: { id: dto.leagueId } },
+            }),
           },
-        }),
+        });
 
-        ...(dto.awayTeamId && {
-          awayTeam: {
-            connect: {
-              id: dto.awayTeamId,
-            },
-          },
-        }),
+        if (finished) {
+          await this.scoringService.scoreMatchInTransaction(
+            tx,
+            id,
+          );
+        } else if (current.scoredAt !== null) {
+          // Evita mantener puntos de un resultado invalidado.
+          await tx.prediction.updateMany({
+            where: { matchId: id },
+            data: { points: 0 },
+          });
 
-        ...(dto.matchdayId && {
-          matchday: {
-            connect: {
-              id: dto.matchdayId,
-            },
-          },
-        }),
+          await tx.match.update({
+            where: { id },
+            data: { scoredAt: null },
+          });
+        }
 
-        ...(dto.leagueId && {
-          league: {
-            connect: {
-              id: dto.leagueId,
-            },
-          },
-        }),
-
+        return updated;
       },
-
-    });
-
+      { timeout: 20000 },
+    );
   }
 
   async findByMatchday(matchdayId: number) {

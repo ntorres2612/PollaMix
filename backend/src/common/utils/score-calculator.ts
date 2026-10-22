@@ -1,16 +1,25 @@
+
+/**
+ * Regla oficial de puntuación PollaMix.
+ *
+ * 1 punto: acierta ganador local, visitante o empate.
+ * 0 puntos: resultado incorrecto.
+ *
+ * El marcador exacto no concede puntos adicionales.
+ */
 export function calculateScore(
   predictionHome: number,
   predictionAway: number,
   resultHome: number,
   resultAway: number,
 ): number {
-  const predictionDifference = predictionHome - predictionAway;
-  const resultDifference = resultHome - resultAway;
+  const predictedResult = Math.sign(
+    predictionHome - predictionAway,
+  );
 
-  const predictionResult = Math.sign(predictionDifference);
-  const actualResult = Math.sign(resultDifference);
+  const actualResult = Math.sign(
+    resultHome - resultAway,
+  );
 
-  // 1 punto por acertar local, empate o visitante.
-  return predictionResult === actualResult ? 1 : 0;
+  return predictedResult === actualResult ? 1 : 0;
 }
-

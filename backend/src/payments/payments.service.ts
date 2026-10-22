@@ -1,8 +1,11 @@
+
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+
+import { randomUUID } from 'node:crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -11,165 +14,119 @@ import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
 
 @Injectable()
 export class PaymentsService {
-
   constructor(
     private readonly prisma: PrismaService,
   ) {}
 
-  /**
-   * Crear un pago para la inscripción a un torneo.
-   */
-  async create(
-    userId: number,
-    dto: CreatePaymentDto,
-  ) {
-
-    // 1. Verificar torneo
-    const tournament =
-      await this.prisma.tournament.findUnique({
+  async create(userId: number, dto: CreatePaymentDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const tournament = await tx.tournament.findUnique({
         where: {
           id: dto.tournamentId,
         },
       });
 
-    if (!tournament) {
-      throw new NotFoundException(
-        'El torneo no existe.',
-      );
-    }
+      if (!tournament) {
+        throw new NotFoundException(
+          'La Polla no existe.',
+        );
+      }
 
-    // 2. Verificar que esté activo
-    if (!tournament.active) {
-      throw new BadRequestException(
-        'El torneo no está activo.',
-      );
-    }
+      const now = new Date();
 
-    // 3. Verificar que la inscripción tenga costo
-    if (tournament.inscription <= 0) {
-      throw new BadRequestException(
-        'Este torneo no requiere pago de inscripción.',
-      );
-    }
+      if (
+        !tournament.active ||
+        now < tournament.registrationStartsAt ||
+        now >= tournament.registrationEndsAt
+      ) {
+        throw new BadRequestException(
+          'Las inscripciones no están abiertas.',
+        );
+      }
 
-    // 4. Validar monto
-    if (
-      dto.amount !==
-      tournament.inscription
-    ) {
-      throw new BadRequestException(
-        `El valor de la inscripción es ${tournament.inscription}.`,
-      );
-    }
+      if (
+        !Number.isSafeInteger(tournament.inscription) ||
+        tournament.inscription <= 0
+      ) {
+        throw new BadRequestException(
+          'El valor de inscripción no está configurado correctamente.',
+        );
+      }
 
-    // 5. Verificar participante
-    const participant =
-      await this.prisma.tournamentParticipant.findUnique({
-        where: {
-          tournamentId_userId: {
-            tournamentId:
-              dto.tournamentId,
-            userId,
+      const participant =
+        await tx.tournamentParticipant.findUnique({
+          where: {
+            tournamentId_userId: {
+              tournamentId: dto.tournamentId,
+              userId,
+            },
           },
-        },
-      });
+        });
 
-    if (!participant) {
-      throw new BadRequestException(
-        'El usuario no está inscrito en este torneo.',
-      );
-    }
+      if (!participant) {
+        throw new BadRequestException(
+          'Primero debes inscribirte en la Polla.',
+        );
+      }
 
-    // 6. Verificar si ya existe un pago
-    // pendiente o aprobado
-    const existingPayment =
-      await this.prisma.payment.findFirst({
+      const existingPayment = await tx.payment.findFirst({
         where: {
-          tournamentId:
-            dto.tournamentId,
-
+          tournamentId: dto.tournamentId,
           userId,
-
           status: {
-            in: [
-              'PENDING',
-              'APPROVED',
-            ],
+            in: ['PENDING', 'APPROVED'],
           },
+        },
+        orderBy: {
+          id: 'desc',
         },
       });
 
-    if (existingPayment) {
-      throw new BadRequestException(
-        'Ya existe un pago pendiente o aprobado para este torneo.',
-      );
-    }
+      if (existingPayment) {
+        // Una segunda solicitud no debe crear otro pago.
+        return existingPayment;
+      }
 
-    // 7. Crear pago
-    return this.prisma.payment.create({
-      data: {
-        amount: dto.amount,
+      if (participant.paid) {
+        throw new BadRequestException(
+          'Esta participación ya está marcada como pagada.',
+        );
+      }
 
-        reference:
-          dto.reference,
-
-        status:
-          'PENDING',
-
-        method:
-          dto.method,
-
-        userId,
-
-        tournamentId:
-          dto.tournamentId,
-
-        participantId:
-          participant.id,
-      },
-
-      include: {
-        tournament: true,
-
-        participant: true,
-      },
+      return tx.payment.create({
+        data: {
+          amount: tournament.inscription,
+          reference: `PNT-${dto.tournamentId}-${userId}-${randomUUID()}`,
+          status: 'PENDING',
+          method: null,
+          userId,
+          tournamentId: dto.tournamentId,
+          participantId: participant.id,
+        },
+        include: {
+          tournament: true,
+          participant: true,
+        },
+      });
     });
   }
 
-  /**
-   * Consultar pagos del usuario autenticado.
-   */
-  async findMyPayments(
-    userId: number,
-  ) {
-
+  async findMyPayments(userId: number) {
     return this.prisma.payment.findMany({
-
       where: {
         userId,
       },
-
       include: {
         tournament: true,
         participant: true,
       },
-
       orderBy: {
         createdAt: 'desc',
       },
-
     });
   }
 
-  /**
-   * Consultar pagos de un torneo.
-   *
-   * Uso exclusivo de administradores.
-   */
-  async findByTournament(
-    tournamentId: number,
-  ) {
-
+  async findByTournament(tournamentId: number) {
     const tournament =
       await this.prisma.tournament.findUnique({
         where: {
@@ -179,20 +136,16 @@ export class PaymentsService {
 
     if (!tournament) {
       throw new NotFoundException(
-        'El torneo no existe.',
+        'La Polla no existe.',
       );
     }
 
     return this.prisma.payment.findMany({
-
       where: {
         tournamentId,
       },
-
       include: {
-
         participant: true,
-
         user: {
           select: {
             id: true,
@@ -200,45 +153,25 @@ export class PaymentsService {
             email: true,
           },
         },
-
       },
-
       orderBy: [
-        {
-          createdAt:
-            'desc',
-        },
-        {
-          id:
-            'desc',
-        },
+        { createdAt: 'desc' },
+        { id: 'desc' },
       ],
-
     });
   }
 
-  /**
-   * Consultar un pago.
-   */
-  async findOne(
-    id: number,
-    userId: number,
-  ) {
-
-    const payment =
-      await this.prisma.payment.findFirst({
-
-        where: {
-          id,
-          userId,
-        },
-
-        include: {
-          tournament: true,
-          participant: true,
-        },
-
-      });
+  async findOne(id: number, userId: number) {
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        id,
+        userId,
+      },
+      include: {
+        tournament: true,
+        participant: true,
+      },
+    });
 
     if (!payment) {
       throw new NotFoundException(
@@ -249,21 +182,17 @@ export class PaymentsService {
     return payment;
   }
 
-  /**
-   * Actualizar estado del pago.
+  /*
+   * Aprobación manual exclusiva del administrador.
+   * Se conservará para pruebas controladas.
    *
-   * Estados permitidos:
-   *
-   * PENDING
-   * APPROVED
-   * REJECTED
-   * CANCELLED
+   * Una pasarela real necesitará una confirmación
+   * autenticada desde su servidor.
    */
   async updateStatus(
     id: number,
     dto: UpdatePaymentStatusDto,
   ) {
-
     const validStatuses = [
       'PENDING',
       'APPROVED',
@@ -271,98 +200,65 @@ export class PaymentsService {
       'CANCELLED',
     ];
 
-    if (
-      !validStatuses.includes(
-        dto.status,
-      )
-    ) {
+    if (!validStatuses.includes(dto.status)) {
       throw new BadRequestException(
         'Estado de pago no válido.',
       );
     }
 
-    const payment =
-      await this.prisma.payment.findUnique({
-
-        where: {
-          id,
-        },
-
+    return this.prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.findUnique({
+        where: { id },
       });
 
-    if (!payment) {
-      throw new NotFoundException(
-        'El pago no existe.',
-      );
-    }
+      if (!payment) {
+        throw new NotFoundException(
+          'El pago no existe.',
+        );
+      }
 
-    /*
-     * Si el pago es aprobado,
-     * registramos la fecha de pago.
-     *
-     * Para REJECTED y CANCELLED
-     * no existe fecha de pago.
-     */
-    const paidAt =
-      dto.status === 'APPROVED'
-        ? new Date()
-        : null;
+      if (payment.status === 'APPROVED') {
+        if (dto.status === 'APPROVED') {
+          return payment;
+        }
 
-    /*
-     * Actualizar el pago y,
-     * en la misma transacción,
-     * sincronizar el estado
-     * del participante.
-     */
-    const updated =
-      await this.prisma.$transaction(
-        async (tx) => {
+        throw new BadRequestException(
+          'Un pago aprobado no puede cambiar de estado desde esta operación.',
+        );
+      }
 
-          const paymentUpdated =
-            await tx.payment.update({
+      if (
+        payment.status === 'REJECTED' ||
+        payment.status === 'CANCELLED'
+      ) {
+        throw new BadRequestException(
+          'Este pago ya tiene un estado final.',
+        );
+      }
 
-              where: {
-                id,
-              },
-
-              data: {
-
-                status:
-                  dto.status,
-
-                paidAt,
-
-              },
-
-            });
-
-          if (
-            payment.participantId
-          ) {
-
-            await tx.tournamentParticipant.update({
-
-              where: {
-                id:
-                  payment.participantId,
-              },
-
-              data: {
-
-                paid:
-                  dto.status ===
-                  'APPROVED',
-
-              },
-
-            });
-
-          }
-
-          return paymentUpdated;
+      const updated = await tx.payment.update({
+        where: { id },
+        data: {
+          status: dto.status,
+          paidAt:
+            dto.status === 'APPROVED'
+              ? new Date()
+              : null,
         },
-      );
+      });
 
-    return updated;
+      if (payment.participantId) {
+        await tx.tournamentParticipant.update({
+          where: {
+            id: payment.participantId,
+          },
+          data: {
+            paid: dto.status === 'APPROVED',
+          },
+        });
+      }
+
+      return updated;
+    });
   }
 }

@@ -62,6 +62,7 @@ model Tournament {
 
   startsAt          DateTime
   endsAt            DateTime
+  predictionsCloseAt DateTime?
   tournamentMatches TournamentMatch[]
 
   active    Boolean  @default(true)
@@ -87,6 +88,7 @@ model TournamentParticipant {
   payments Payment[]
 
   @@unique([tournamentId, userId])
+  predictionsSubmittedAt DateTime?
 }
 
 model Team {

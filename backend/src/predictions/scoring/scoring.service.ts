@@ -3,7 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { calculateScore } from '../../common/utils/score-calculator';
 
@@ -11,14 +11,32 @@ import { calculateScore } from '../../common/utils/score-calculator';
 export class ScoringService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Calcula y actualiza los puntos de los pronósticos
-   * asociados a un partido.
-   *
-   * Regla: 1 punto por acertar local, empate o visitante.
-   */
   async scoreMatch(matchId: number) {
-    const match = await this.prisma.match.findUnique({
+    return this.prisma.$transaction(
+      async (tx) => {
+        // Impide puntuaciones simultáneas del mismo partido.
+        await tx.$queryRaw`
+          SELECT id FROM "Match"
+          WHERE id = ${matchId}
+          FOR UPDATE
+        `;
+
+        return this.scoreMatchInTransaction(tx, matchId);
+      },
+      { timeout: 20000 },
+    );
+  }
+
+  /**
+   * Calcula puntos dentro de una transacción existente.
+   * El llamador debe haber bloqueado el partido mediante
+   * FOR UPDATE o una actualización del mismo registro.
+   */
+  async scoreMatchInTransaction(
+    tx: Prisma.TransactionClient,
+    matchId: number,
+  ) {
+    const match = await tx.match.findUnique({
       where: { id: matchId },
       include: { predictions: true },
     });
@@ -27,38 +45,17 @@ export class ScoringService {
       throw new NotFoundException('Partido no encontrado.');
     }
 
-    if (match.homeScore === null || match.awayScore === null) {
-      throw new BadRequestException(
-        'El partido aún no tiene resultado.',
-      );
-    }
-
     if (!match.finished) {
       throw new BadRequestException(
         'El partido todavía no ha terminado.',
       );
     }
 
-    if (match.predictions.length === 0) {
-      await this.prisma.match.update({
-        where: { id: match.id },
-        data: { scoredAt: new Date() },
-      });
-
-      return {
-        success: true,
-        matchId: match.id,
-        predictions: 0,
-        scored: 0,
-        result: {
-          homeScore: match.homeScore,
-          awayScore: match.awayScore,
-        },
-        message: 'El partido no tiene pronósticos para calificar.',
-      };
+    if (match.homeScore === null || match.awayScore === null) {
+      throw new BadRequestException(
+        'El partido aún no tiene resultado.',
+      );
     }
-
-    let scored = 0;
 
     for (const prediction of match.predictions) {
       const points = calculateScore(
@@ -68,24 +65,22 @@ export class ScoringService {
         match.awayScore,
       );
 
-      await this.prisma.prediction.update({
+      await tx.prediction.update({
         where: { id: prediction.id },
         data: { points },
       });
-
-      scored++;
     }
 
-    await this.prisma.match.update({
-      where: { id: match.id },
+    await tx.match.update({
+      where: { id: matchId },
       data: { scoredAt: new Date() },
     });
 
     return {
       success: true,
-      matchId: match.id,
+      matchId,
       predictions: match.predictions.length,
-      scored,
+      scored: match.predictions.length,
       result: {
         homeScore: match.homeScore,
         awayScore: match.awayScore,
@@ -93,4 +88,3 @@ export class ScoringService {
     };
   }
 }
-

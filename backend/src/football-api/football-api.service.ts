@@ -23,6 +23,7 @@ export class FootballApiService {
 
   @Cron('*/10 * * * *', {
     name: 'pollamix-results-sync',
+    disabled: process.env.POLLAMIX_DISABLE_SYNC === '1',
   })
   async syncActiveTournamentResults() {
     if (this.syncInProgress) {

@@ -12,7 +12,7 @@ import { UpdateTournamentDto } from "./dto/update-tournament.dto";
 
 @Injectable()
 export class TournamentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   // ============================================================
   // CREAR TORNEO
@@ -104,16 +104,30 @@ export class TournamentsService {
         registrationStartsAt: {
           lte: now,
         },
+        registrationEndsAt: {
+          gt: now,
+        },
         endsAt: {
           gte: now,
         },
       },
-      orderBy: {
-        startsAt: "asc",
-      },
+      orderBy: [
+        {
+          startsAt: "desc",
+        },
+        {
+          id: "desc",
+        },
+      ],
     });
 
-    return tournament;
+    if (!tournament) {
+      return null;
+    }
+
+    const { prize, ...publicTournament } = tournament;
+
+    return publicTournament;
   }
 
   // ============================================================
@@ -139,11 +153,10 @@ export class TournamentsService {
       include: {
         tournament: true,
       },
-      orderBy: {
-        tournament: {
-          startsAt: "asc",
-        },
-      },
+      orderBy: [
+        { tournament: { startsAt: "desc" } },
+        { tournamentId: "desc" },
+      ],
     });
 
     return participation?.tournament ?? null;
@@ -272,6 +285,7 @@ export class TournamentsService {
       now >= tournament.registrationStartsAt &&
       now <= tournament.registrationEndsAt;
 
+
     return {
       tournamentId: tournament.id,
       active: tournament.active,
@@ -280,6 +294,9 @@ export class TournamentsService {
       registrationEndsAt: tournament.registrationEndsAt,
       startsAt: tournament.startsAt,
       endsAt: tournament.endsAt,
+      predictionsCloseAt: tournament.predictionsCloseAt,
+      predictionsSubmittedAt:
+        participant?.predictionsSubmittedAt ?? null,
       inscription: tournament.inscription,
       prize: tournament.prize,
       maxPlayers: tournament.maxPlayers,
@@ -287,6 +304,7 @@ export class TournamentsService {
       isParticipant: !!participant,
       paid: participant?.paid ?? false,
     };
+
   }
 
   // ============================================================
@@ -677,6 +695,19 @@ export class TournamentsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      // El mismo bloqueo debe respetarse en cualquier futuro flujo que cambie la selección.
+      await tx.$queryRaw`SELECT id FROM "Tournament" WHERE id = ${tournamentId} FOR UPDATE`;
+      const [existingPredictions, confirmedParticipants] = await Promise.all([
+        tx.prediction.count({ where: { tournamentId } }),
+        tx.tournamentParticipant.count({
+          where: { tournamentId, predictionsSubmittedAt: { not: null } },
+        }),
+      ]);
+      if (existingPredictions > 0 || confirmedParticipants > 0) {
+        throw new BadRequestException(
+          'No se pueden modificar los partidos: ya existen pronósticos registrados o confirmados.',
+        );
+      }
       await tx.tournamentMatch.deleteMany({
         where: {
           tournamentId,
@@ -754,6 +785,65 @@ export class TournamentsService {
         position: item.position,
         ...item.match,
       })),
+    };
+  }
+
+
+  // ============================================================
+  // PREMIOS DEFINITIVOS - PUBLICACION AL CIERRE
+  // ============================================================
+
+  async getPrizes(tournamentId: number) {
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: {
+        id: true,
+        registrationEndsAt: true,
+      },
+    });
+
+    if (!tournament) {
+      throw new NotFoundException('La Polla no existe.');
+    }
+
+    // El servidor decide si se pueden publicar los valores.
+    if (new Date() < tournament.registrationEndsAt) {
+      return {
+        tournamentId,
+        published: false,
+        currency: 'USD',
+        prizes: null,
+        message: 'Premios pendientes de publicación.',
+      };
+    }
+
+    // La suma de los pagos aprobados es la única fuente de recaudación.
+    const totals = await this.prisma.payment.aggregate({
+      where: {
+        tournamentId,
+        status: 'APPROVED',
+      },
+      _sum: { amount: true },
+    });
+
+    // Trabajamos en centavos para distribuir exactamente el importe.
+    const revenueCents = totals._sum.amount ?? 0;
+    const poolCents = Math.round(revenueCents * 0.70);
+
+    // Distribución provisional entre los tres primeros puestos.
+    const firstCents = Math.round(poolCents * 0.70);
+    const secondCents = Math.round(poolCents * 0.20);
+    const thirdCents = poolCents - firstCents - secondCents;
+
+    return {
+      tournamentId,
+      published: true,
+      currency: 'USD',
+      prizes: {
+        first: firstCents / 100,
+        second: secondCents / 100,
+        third: thirdCents / 100,
+      },
     };
   }
 }
