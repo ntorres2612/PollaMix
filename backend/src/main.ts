@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
@@ -7,6 +8,14 @@ import {
 } from '@nestjs/swagger';
 
 async function bootstrap() {
+  const jwtSecret = process.env.JWT_SECRET;
+
+  if (!jwtSecret || !jwtSecret.trim()) {
+    throw new Error(
+      'JWT_SECRET es obligatorio para iniciar PollaMix.',
+    );
+  }
+
   const app = await NestFactory.create(AppModule);
 
   // --------------------------------------------------
@@ -14,7 +23,9 @@ async function bootstrap() {
   // --------------------------------------------------
 
   app.enableCors({
-    origin: 'http://localhost:3000',
+    origin:
+      process.env.FRONTEND_URL ||
+      'http://localhost:3000',
     methods: [
       'GET',
       'HEAD',
@@ -35,32 +46,36 @@ async function bootstrap() {
   // Swagger
   // --------------------------------------------------
 
-  const config = new DocumentBuilder()
-    .setTitle('PollaMix API')
-    .setDescription('API oficial de PollaMix')
-    .setVersion('1.0.0')
-    .addBearerAuth()
-    .build();
+  if (process.env.ENABLE_SWAGGER === 'true') {
+    const config = new DocumentBuilder()
+      .setTitle('PollaMix API')
+      .setDescription('API oficial de PollaMix')
+      .setVersion('1.0.0')
+      .addBearerAuth()
+      .build();
 
-  const document = SwaggerModule.createDocument(
-    app,
-    config,
-  );
+    const document = SwaggerModule.createDocument(
+      app,
+      config,
+    );
 
-  SwaggerModule.setup(
-    'api',
-    app,
-    document,
-  );
+    SwaggerModule.setup(
+      'api',
+      app,
+      document,
+    );
+  }
 
   // --------------------------------------------------
   // Servidor
   // --------------------------------------------------
 
-  await app.listen(3001);
+  const port = Number(process.env.PORT || 3001);
+
+  await app.listen(port);
 
   Logger.log(
-    'Backend iniciado en http://localhost:3001',
+    `Backend iniciado en el puerto ${port}`,
   );
 }
 

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AppConfigModule } from './config/config.module';
 import { TeamsModule } from './teams/teams.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { MatchdaysModule } from './matchdays/matchdays.module';
@@ -19,6 +20,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    AppConfigModule,
     ScheduleModule.forRoot(),
 
     PrismaModule,
