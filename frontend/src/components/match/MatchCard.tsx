@@ -1,7 +1,7 @@
 
 "use client";
 
-import Image from "next/image";
+import TeamLogo from "./TeamLogo";
 
 import { ApiMatch } from "@/types/match";
 import type { PredictionSelection } from "@/lib/predictions";
@@ -68,12 +68,9 @@ export default function MatchCard({
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-6">
         {/* LOCAL */}
         <div className="flex items-center gap-4">
-          <Image
+          <TeamLogo
             src={match.homeTeam.logo}
-            alt={match.homeTeam.name}
-            width={55}
-            height={55}
-            className="object-contain"
+            name={match.homeTeam.name}
           />
 
           <div>
@@ -128,12 +125,9 @@ export default function MatchCard({
             </p>
           </div>
 
-          <Image
+          <TeamLogo
             src={match.awayTeam.logo}
-            alt={match.awayTeam.name}
-            width={55}
-            height={55}
-            className="object-contain"
+            name={match.awayTeam.name}
           />
         </div>
       </div>
