@@ -75,6 +75,20 @@ export class PredictionsService {
           FOR UPDATE
         `;
 
+        // El cierre definitivo impide nuevos pronósticos.
+        // La comprobación comparte el bloqueo de Tournament.
+        const prizeClosure =
+          await tx.tournamentPrizeClosure.findUnique({
+            where: { tournamentId },
+            select: { id: true },
+          });
+
+        if (prizeClosure) {
+          throw new ForbiddenException(
+            'Los premios de esta Polla están cerrados. No se permiten nuevos pronósticos.',
+          );
+        }
+
         // Serializa los envíos del mismo participante.
         const rows = await tx.$queryRaw<
           Array<{ id: number }>
@@ -238,8 +252,27 @@ export class PredictionsService {
     userId: number,
     dto: CreatePredictionDto,
   ) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT id FROM "Tournament"
+        WHERE id = ${dto.tournamentId}
+        FOR UPDATE
+      `;
+
+      const closure = await tx.tournamentPrizeClosure.findUnique({
+        where: { tournamentId: dto.tournamentId },
+        select: { id: true },
+      });
+
+      if (closure) {
+        throw new ForbiddenException(
+          'Los premios de esta Polla están cerrados. No se permiten nuevos pronósticos.',
+        );
+      }
+
+
     // 1. Verificar partido
-    const match = await this.prisma.match.findUnique({
+    const match = await tx.match.findUnique({
       where: {
         id: dto.matchId,
       },
@@ -256,7 +289,7 @@ export class PredictionsService {
 
     // 2. Verificar torneo
     const tournament =
-      await this.prisma.tournament.findUnique({
+      await tx.tournament.findUnique({
         where: {
           id: dto.tournamentId,
         },
@@ -289,7 +322,7 @@ export class PredictionsService {
     }
 
     const selectedMatch =
-      await this.prisma.tournamentMatch.findUnique({
+      await tx.tournamentMatch.findUnique({
         where: {
           tournamentId_matchId: {
             tournamentId: dto.tournamentId,
@@ -305,7 +338,7 @@ export class PredictionsService {
     }
     // 5. Verificar inscripción
     const participant =
-      await this.prisma.tournamentParticipant.findUnique({
+      await tx.tournamentParticipant.findUnique({
         where: {
           tournamentId_userId: {
             tournamentId: dto.tournamentId,
@@ -365,7 +398,7 @@ export class PredictionsService {
 
     // 10. Evitar duplicado
     const existing =
-      await this.prisma.prediction.findUnique({
+      await tx.prediction.findUnique({
         where: {
           userId_matchId_tournamentId: {
             userId,
@@ -382,7 +415,7 @@ export class PredictionsService {
     }
 
     // 11. Crear
-    return this.prisma.prediction.create({
+    return tx.prediction.create({
       data: {
         userId,
         matchId: dto.matchId,
@@ -390,6 +423,7 @@ export class PredictionsService {
         homeScore: dto.homeScore,
         awayScore: dto.awayScore,
       },
+    });
     });
   }
 
@@ -466,108 +500,148 @@ export class PredictionsService {
     userId: number,
     dto: UpdatePredictionDto,
   ) {
-    const prediction =
-      await this.prisma.prediction.findUnique({
-        where: { id },
-        include: {
-          match: true,
-          tournament: true,
-        },
+    return this.prisma.$transaction(async (tx) => {
+      const prediction =
+        await tx.prediction.findUnique({
+          where: { id },
+          include: {
+            match: true,
+            tournament: true,
+          },
+        });
+
+      if (!prediction) {
+        throw new NotFoundException(
+          'Pronóstico no encontrado',
+        );
+      }
+
+      if (prediction.userId !== userId) {
+        throw new ForbiddenException(
+          'No tienes permisos para modificar este pronóstico.',
+        );
+      }
+
+      // Comparte el bloqueo con el cierre definitivo de premios.
+      await tx.$queryRaw`
+        SELECT id FROM "Tournament"
+        WHERE id = ${prediction.tournamentId}
+        FOR UPDATE
+      `;
+
+      const closure = await tx.tournamentPrizeClosure.findUnique({
+        where: { tournamentId: prediction.tournamentId },
+        select: { id: true },
       });
 
-    if (!prediction) {
-      throw new NotFoundException(
-        'Pronóstico no encontrado',
-      );
-    }
+      if (closure) {
+        throw new ForbiddenException(
+          'Los premios de esta Polla están cerrados. Los pronósticos son definitivos.',
+        );
+      }
 
-    if (prediction.userId !== userId) {
-      throw new ForbiddenException(
-        'No tienes permisos para modificar este pronóstico.',
-      );
-    }
+      if (prediction.tournament.predictionsCloseAt !== null) {
+        throw new ForbiddenException(
+          'Los pronósticos de esta Polla son definitivos y no pueden modificarse.',
+        );
+      }
 
-    if (prediction.tournament.predictionsCloseAt !== null) {
-      throw new ForbiddenException(
-        'Los pronósticos de esta Polla son definitivos y no pueden modificarse.',
-      );
-    }
+      if (prediction.match.date <= new Date()) {
+        throw new BadRequestException(
+          'El partido ya comenzó. El pronóstico no puede modificarse.',
+        );
+      }
 
-    if (prediction.match.date <= new Date()) {
-      throw new BadRequestException(
-        'El partido ya comenzó. El pronóstico no puede modificarse.',
-      );
-    }
+      if (prediction.match.finished) {
+        throw new BadRequestException(
+          'El partido ya terminó. El pronóstico no puede modificarse.',
+        );
+      }
 
-    if (prediction.match.finished) {
-      throw new BadRequestException(
-        'El partido ya terminó. El pronóstico no puede modificarse.',
-      );
-    }
-
-    return this.prisma.prediction.update({
-      where: { id },
-      data: dto,
+      return tx.prediction.update({
+        where: { id },
+        data: dto,
+      });
     });
   }
-
   async remove(
     id: number,
     userId: number,
   ) {
-    const prediction =
-      await this.prisma.prediction.findUnique({
-        where: { id },
-        include: {
-          match: true,
-          tournament: true,
-        },
+    return this.prisma.$transaction(async (tx) => {
+      const prediction =
+        await tx.prediction.findUnique({
+          where: { id },
+          include: {
+            match: true,
+            tournament: true,
+          },
+        });
+
+      if (!prediction) {
+        throw new NotFoundException(
+          'Pronóstico no encontrado',
+        );
+      }
+
+      if (prediction.userId !== userId) {
+        throw new ForbiddenException(
+          'No tienes permisos para eliminar este pronóstico.',
+        );
+      }
+
+      // Comparte el bloqueo con el cierre definitivo de premios.
+      await tx.$queryRaw`
+        SELECT id FROM "Tournament"
+        WHERE id = ${prediction.tournamentId}
+        FOR UPDATE
+      `;
+
+      const closure = await tx.tournamentPrizeClosure.findUnique({
+        where: { tournamentId: prediction.tournamentId },
+        select: { id: true },
       });
 
-    if (!prediction) {
-      throw new NotFoundException(
-        'Pronóstico no encontrado',
-      );
-    }
+      if (closure) {
+        throw new ForbiddenException(
+          'Los premios de esta Polla están cerrados. Los pronósticos son definitivos.',
+        );
+      }
 
-    if (prediction.userId !== userId) {
-      throw new ForbiddenException(
-        'No tienes permisos para eliminar este pronóstico.',
-      );
-    }
+      if (prediction.tournament.predictionsCloseAt !== null) {
+        throw new ForbiddenException(
+          'Los pronósticos de esta Polla son definitivos y no pueden eliminarse.',
+        );
+      }
 
-    if (prediction.tournament.predictionsCloseAt !== null) {
-      throw new ForbiddenException(
-        'Los pronósticos de esta Polla son definitivos y no pueden eliminarse.',
-      );
-    }
+      if (!prediction.tournament.active) {
+        throw new BadRequestException(
+          'El torneo no está activo.',
+        );
+      }
 
-    if (!prediction.tournament.active) {
-      throw new BadRequestException(
-        'El torneo no está activo.',
-      );
-    }
+      if (prediction.tournament.endsAt <= new Date()) {
+        throw new BadRequestException(
+          'El torneo ya terminó. El pronóstico no puede eliminarse.',
+        );
+      }
 
-    if (prediction.tournament.endsAt <= new Date()) {
-      throw new BadRequestException(
-        'El torneo ya terminó. El pronóstico no puede eliminarse.',
-      );
-    }
+      if (prediction.match.finished) {
+        throw new BadRequestException(
+          'El partido ya terminó. El pronóstico no puede eliminarse.',
+        );
+      }
 
-    if (prediction.match.finished) {
-      throw new BadRequestException(
-        'El partido ya terminó. El pronóstico no puede eliminarse.',
-      );
-    }
+      if (prediction.match.date <= new Date()) {
+        throw new BadRequestException(
+          'El partido ya comenzó. El pronóstico no puede eliminarse.',
+        );
+      }
 
-    if (prediction.match.date <= new Date()) {
-      throw new BadRequestException(
-        'El partido ya comenzó. El pronóstico no puede eliminarse.',
-      );
-    }
-
-    return this.prisma.prediction.delete({
-      where: { id },
+      return tx.prediction.delete({
+        where: { id },
+      });
     });
   }
+
 }

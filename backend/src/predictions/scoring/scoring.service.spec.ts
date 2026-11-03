@@ -6,6 +6,13 @@ describe('ScoringService', () => {
   let service: ScoringService;
 
   const tx = {
+    tournamentMatch: {
+      findMany: jest.fn(),
+    },
+    tournamentPrizeClosure: {
+      findFirst: jest.fn(),
+    },
+
     $queryRaw: jest.fn(),
     match: {
       findUnique: jest.fn(),
@@ -36,6 +43,13 @@ describe('ScoringService', () => {
       prisma as unknown as PrismaService,
     );
   });
+
+  beforeEach(() => {
+    tx.tournamentMatch.findMany.mockResolvedValue([]);
+    tx.tournamentPrizeClosure.findFirst.mockResolvedValue(null);
+  });
+
+
 
   it('asigna 1 punto al acierto y 0 al error', async () => {
     tx.match.findUnique.mockResolvedValue({

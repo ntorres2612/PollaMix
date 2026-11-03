@@ -7,6 +7,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { lockMatchForPrizeSafeUpdate } from '../../tournaments/prizes/match-prize-lock';
 
 import { ScoringService } from '../../predictions/scoring/scoring.service';
 
@@ -546,6 +547,7 @@ export class EspnFootballService {
           }
           const { match, scoringResult } = await this.prisma.$transaction(
             async (tx) => {
+          await lockMatchForPrizeSafeUpdate(tx, existingMatch.id);
           const match =
             await tx.match.update({
               where: {

@@ -129,9 +129,9 @@ export class TournamentParticipantsService {
             );
           }
 
-          // Todos los torneos que utilicen este flujo
-          // deben tener importes en centavos USD.
+          // Este flujo recibe importes enteros en COP.
           if (
+            tournament.currency !== 'COP' ||
             !Number.isSafeInteger(tournament.inscription) ||
             tournament.inscription <= 0
           ) {
@@ -162,6 +162,7 @@ export class TournamentParticipantsService {
               userId,
               participantId: participant.id,
               amount: tournament.inscription,
+              currency: 'COP',
               status: 'PENDING',
               reference:
                 `PNT-${tournamentId}-${userId}-${randomUUID()}`,
@@ -178,8 +179,8 @@ export class TournamentParticipantsService {
             participant,
             payment: {
               ...payment,
-              currency: 'USD',
-              amountUsd: payment.amount / 100,
+              currency: 'COP',
+              amountCOP: payment.amount,
             },
           };
         },

@@ -96,6 +96,7 @@ export class PaymentsService {
       return tx.payment.create({
         data: {
           amount: tournament.inscription,
+          currency: tournament.currency,
           reference: `PNT-${dto.tournamentId}-${userId}-${randomUUID()}`,
           status: 'PENDING',
           method: null,
@@ -214,6 +215,26 @@ export class PaymentsService {
       if (!payment) {
         throw new NotFoundException(
           'El pago no existe.',
+        );
+      }
+
+      // Compartir el bloqueo del torneo con el cierre definitivo.
+      // Ningún cambio de estado puede continuar después del cierre.
+      await tx.$queryRaw`
+        SELECT id FROM "Tournament"
+        WHERE id = ${payment.tournamentId}
+        FOR UPDATE
+      `;
+
+      const prizeClosure =
+        await tx.tournamentPrizeClosure.findUnique({
+          where: { tournamentId: payment.tournamentId },
+          select: { id: true },
+        });
+
+      if (prizeClosure) {
+        throw new BadRequestException(
+          'Los premios de esta Polla están cerrados. No se permiten cambios de pago.',
         );
       }
 

@@ -6,6 +6,7 @@ import {
 import { Cron } from '@nestjs/schedule';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { lockMatchForPrizeSafeUpdate } from '../tournaments/prizes/match-prize-lock';
 import { FootballApiClient } from './football-api.client';
 import { ScoringService } from '../predictions/scoring/scoring.service';
 import { EspnFootballService } from './espn/espn-football.service';
@@ -635,16 +636,20 @@ export class FootballApiService {
         }
       }
 
+      const { savedMatch, existingMatch } = await this.prisma.$transaction(async (tx) => {
       const existingMatch =
-        await this.prisma.match.findUnique({
+        await tx.match.findUnique({
           where: {
             apiId:
               fixtureId,
           },
         });
 
+      if (existingMatch) {
+        await lockMatchForPrizeSafeUpdate(tx, existingMatch.id);
+      }
       const savedMatch =
-        await this.prisma.match.upsert({
+        await tx.match.upsert({
           where: {
             apiId:
               fixtureId,
@@ -697,10 +702,14 @@ export class FootballApiService {
         savedMatch.awayScore !==
           null
       ) {
-        await this.scoringService.scoreMatch(
+        await this.scoringService.scoreMatchInTransaction(
+          tx,
           savedMatch.id,
         );
       }
+
+      return { savedMatch, existingMatch };
+      }, { timeout: 20000 });
 
       if (
         existingMatch
@@ -858,8 +867,10 @@ export class FootballApiService {
             )
           : existingMatch.date;
 
+      const committedScoring = await this.prisma.$transaction(async (tx) => {
+      await lockMatchForPrizeSafeUpdate(tx, existingMatch.id);
       const match =
-        await this.prisma.match.update({
+        await tx.match.update({
           where: {
             id:
               existingMatch.id,
@@ -875,7 +886,6 @@ export class FootballApiService {
           },
         });
 
-      updated++;
 
       if (
         finished &&
@@ -884,12 +894,17 @@ export class FootballApiService {
         awayScore !==
           null
       ) {
-        await this.scoringService.scoreMatch(
+        await this.scoringService.scoreMatchInTransaction(
+          tx,
           match.id,
         );
 
-        scored++;
       }
+      return finished && homeScore !== null && awayScore !== null;
+      }, { timeout: 20000 });
+      updated++;
+      if (committedScoring) scored++;
+
     }
 
     return {

@@ -27,6 +27,7 @@ export interface Tournament {
   season: number;
 
   inscription: number;
+  currency: "COP" | "USD";
 
   prize: number;
 
@@ -226,6 +227,7 @@ export interface TournamentPayment {
   id: number;
 
   amount: number;
+  currency: "COP" | "USD";
 
   reference: string;
 
@@ -357,5 +359,94 @@ export async function approveParticipantPayment(
   return updatePaymentStatus(
     pendingPayment.id,
     "APPROVED",
+  );
+}
+
+export interface TournamentPrizeWinner {
+  userId: number;
+  name: string;
+  points: number;
+  position: number;
+  amountCOP: number;
+}
+
+export interface TournamentPrizesResponse {
+  finalized?: boolean;
+  closedAt?: string | null;
+  tournamentId: number;
+  published: boolean;
+  winnersPublished: boolean;
+  resultsReady?: boolean;
+  paymentsReady?: boolean;
+  tournamentEnded?: boolean;
+  currency: "COP";
+  registeredPaidPlayers?: number;
+  revenueCOP?: number;
+  prizePoolCOP?: number;
+  profitCOP?: number;
+  prizes: {
+    first: number;
+    second: number;
+    third: number;
+  } | null;
+  winners: TournamentPrizeWinner[] | null;
+  allocatedCOP?: number | null;
+  undistributedCOP?: number | null;
+  message?: string;
+}
+
+export async function getTournamentPrizes(
+  tournamentId: number,
+): Promise<TournamentPrizesResponse> {
+  return apiFetch<TournamentPrizesResponse>(
+    `/tournaments/${tournamentId}/prizes`,
+  );
+}
+
+
+// Cierre definitivo: solo disponible para administradores.
+// El servidor mantiene la operación deshabilitada hasta su validación.
+export async function closeTournamentPrizes(
+  tournamentId: number,
+): Promise<unknown> {
+  return apiFetch(
+    `/tournaments/${tournamentId}/close-prizes`,
+    { method: 'POST' },
+  );
+}
+
+
+export interface PublicPrizeHistory {
+  id: number;
+  name: string;
+  season: number;
+  closedAt: string;
+}
+
+export interface PublicPrizesResponse {
+  tournamentId: number;
+  published: boolean;
+  finalized?: boolean;
+  closedAt?: string | null;
+  currency: "COP";
+  prizes: {
+    first: number;
+    second: number;
+    third: number;
+  } | null;
+  message?: string;
+}
+
+export async function getPrizeHistory(): Promise<PublicPrizeHistory[]> {
+  return apiFetch<PublicPrizeHistory[]>(
+    "/tournaments/prizes/history",
+  );
+}
+
+export async function getTournamentPrizesAdmin(
+  tournamentId: number,
+): Promise<TournamentPrizesResponse> {
+  return apiFetch<TournamentPrizesResponse>(
+    `/tournaments/${tournamentId}/prizes/admin`,
   );
 }

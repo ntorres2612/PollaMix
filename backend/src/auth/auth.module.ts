@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { JwtModule } from '@nestjs/jwt';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { PasswordRecoveryService } from './password-recovery.service';
 
 import { PrismaModule } from '../prisma/prisma.module';
 
@@ -12,6 +14,7 @@ import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
     PrismaModule,
 
     PassportModule,
@@ -30,6 +33,7 @@ import { RolesGuard } from './guards/roles.guard';
 
   providers: [
     AuthService,
+    PasswordRecoveryService,
     JwtStrategy,
     RolesGuard,
   ],

@@ -23,6 +23,7 @@ model User {
   predictions  Prediction[]
   payments     Payment[]
   participants TournamentParticipant[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model League {
@@ -54,6 +55,7 @@ model Tournament {
   season Int
 
   inscription Float
+  currency    String @default("COP")
   prize       Float
   maxPlayers  Int
 
@@ -71,6 +73,7 @@ model Tournament {
   participants TournamentParticipant[]
   predictions  Prediction[]
   payments     Payment[]
+  prizeClosure TournamentPrizeClosure?
 }
 
 model TournamentParticipant {
@@ -181,6 +184,7 @@ model Prediction {
 model Payment {
   id        Int       @id @default(autoincrement())
   amount    Float
+  currency  String @default("COP")
   reference String
   status    String
   method    String?
@@ -222,4 +226,49 @@ model TournamentMatch {
   @@unique([tournamentId, position])
   @@index([tournamentId])
   @@index([matchId])
+}
+
+
+// Cierre económico y deportivo definitivo de una Polla.
+// Los importes se almacenan como pesos colombianos enteros.
+model TournamentPrizeClosure {
+  id Int @id @default(autoincrement())
+
+  tournamentId Int @unique
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Restrict)
+
+  currency String @default("COP")
+
+  paidPlayers Int
+
+  revenueCOP   Int
+  prizePoolCOP Int
+  profitCOP    Int
+
+  firstCOP  Int
+  secondCOP Int
+  thirdCOP  Int
+
+  // Ganadores con ID, puntos, posición y premio individual.
+  winners Json
+
+  allocatedCOP     Int
+  undistributedCOP Int
+
+  rulesVersion String @default("1.0")
+  closedAt     DateTime @default(now())
+}
+
+
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }

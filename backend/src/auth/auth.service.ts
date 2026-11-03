@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 
 import * as bcrypt from 'bcrypt';
+import { createHmac } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt/dist/jwt.service';
 
 @Injectable()
@@ -108,6 +109,12 @@ export class AuthService {
       email: user.email,
       name: user.name,
       role: user.role,
+      pwdv: createHmac('sha256', process.env.JWT_SECRET!)
+        .update('pollamix-session-v1:')
+        .update(String(user.id))
+        .update(':')
+        .update(user.password)
+        .digest('hex'),
     };
 
     return {
@@ -120,26 +127,6 @@ export class AuthService {
 
 
   }
-  async resetPassword(email: string, password: string) {
 
-    const hash = await bcrypt.hash(password, 10);
-
-    await this.prisma.user.update({
-
-      where: {
-        email,
-      },
-
-      data: {
-        password: hash,
-      },
-
-    });
-
-    return {
-      success: true,
-    };
-
-  }
 
 }

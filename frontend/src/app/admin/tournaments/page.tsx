@@ -7,8 +7,64 @@ import Container from '@/components/ui/Container';
 import { getCurrentUser, isAuthenticated } from '@/lib/auth';
 import {
   getTournaments,
+  getTournamentPrizesAdmin,
   Tournament,
+  type TournamentPrizesResponse,
 } from '@/lib/tournaments';
+
+type PrizeListResult =
+  | { ok: true; data: TournamentPrizesResponse }
+  | { ok: false };
+
+function TournamentPrizeCell({
+  tournament,
+  result,
+}: {
+  tournament: Tournament;
+  result?: PrizeListResult;
+}) {
+  const prizes = result?.ok ? result.data : null;
+  const closed = prizes?.finalized === true;
+  const pool = prizes?.prizePoolCOP;
+
+  const label = closed
+    ? 'Bolsa definitiva'
+    : result?.ok
+      ? 'Premio configurado'
+      : 'Información de premios';
+
+  const amount =
+    !result || !result.ok
+      ? 'No disponible'
+      : closed
+        ? typeof pool === 'number' && Number.isFinite(pool)
+          ? pool.toLocaleString('es-CO', {
+              style: 'currency',
+              currency: 'COP',
+              maximumFractionDigits: 0,
+            })
+          : 'No disponible'
+        : tournament.currency === 'COP'
+          ? tournament.prize.toLocaleString('es-CO', {
+              style: 'currency',
+              currency: 'COP',
+              maximumFractionDigits: 0,
+            })
+          : tournament.prize.toLocaleString('es-CO') +
+            ' ' + tournament.currency;
+
+  return (
+    <div className="rounded-xl bg-slate-950/60 p-4">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 font-bold">{amount}</p>
+      {closed && (
+        <p className="mt-2 text-xs font-semibold text-emerald-400">
+          PREMIOS CERRADOS
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function AdminTournamentsPage() {
   const router = useRouter();
@@ -16,6 +72,9 @@ export default function AdminTournamentsPage() {
   const [tournaments, setTournaments] = useState<
     Tournament[]
   >([]);
+  const [prizesByTournament, setPrizesByTournament] =
+    useState<Record<number, PrizeListResult>>({});
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -40,6 +99,33 @@ export default function AdminTournamentsPage() {
         const data = await getTournaments();
 
         setTournaments(data);
+
+        const responses = await Promise.allSettled(
+          data.map((tournament) =>
+            getTournamentPrizesAdmin(tournament.id),
+          ),
+        );
+
+        const results: Record<number, PrizeListResult> = {};
+
+        responses.forEach((response, index) => {
+          const id = data[index].id;
+
+          if (response.status === 'fulfilled') {
+            results[id] = {
+              ok: true,
+              data: response.value,
+            };
+          } else {
+            results[id] = { ok: false };
+            console.warn(
+              'No fue posible consultar premios del torneo:',
+              id,
+            );
+          }
+        });
+
+        setPrizesByTournament(results);
       } catch (error) {
         console.error(
           'Error cargando Pollas:',
@@ -146,18 +232,10 @@ export default function AdminTournamentsPage() {
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-slate-950/60 p-4">
-                      <p className="text-xs text-slate-500">
-                        Premio
-                      </p>
-
-                      <p className="mt-1 font-bold">
-                        $
-                        {tournament.prize.toLocaleString(
-                          'es-CO',
-                        )}
-                      </p>
-                    </div>
+                    <TournamentPrizeCell
+                      tournament={tournament}
+                      result={prizesByTournament[tournament.id]}
+                    />
                   </div>
 
                   <button

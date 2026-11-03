@@ -1,3 +1,4 @@
+import { lockMatchForPrizeSafeUpdate } from '../../tournaments/prizes/match-prize-lock';
 import {
   Injectable,
   NotFoundException,
@@ -14,12 +15,9 @@ export class ScoringService {
   async scoreMatch(matchId: number) {
     return this.prisma.$transaction(
       async (tx) => {
-        // Impide puntuaciones simultáneas del mismo partido.
-        await tx.$queryRaw`
-          SELECT id FROM "Match"
-          WHERE id = ${matchId}
-          FOR UPDATE
-        `;
+        // Bloquea los torneos asociados y después el partido.
+        // Impide recalcular puntuaciones de Pollas cerradas.
+        await lockMatchForPrizeSafeUpdate(tx, matchId);
 
         return this.scoreMatchInTransaction(tx, matchId);
       },

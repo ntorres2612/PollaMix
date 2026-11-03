@@ -12,6 +12,9 @@ import {
 import {
   approveParticipantPayment,
   getTournamentPayments,
+  getTournamentPrizesAdmin,
+  closeTournamentPrizes,
+  type TournamentPrizesResponse,
   TournamentPayment,
   getTournament,
   getTournamentRanking,
@@ -78,6 +81,13 @@ export default function AdminTournamentDetailPage() {
   const [payments, setPayments] =
     useState<TournamentPayment[]>([]);
 
+  const [prizes, setPrizes] =
+    useState<TournamentPrizesResponse | null>(null);
+
+  const [prizesError, setPrizesError] = useState('');
+  const [closingPrizes, setClosingPrizes] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -121,6 +131,18 @@ export default function AdminTournamentDetailPage() {
         setTournament(detail);
         setRanking(rankingData);
         setPayments(paymentsData);
+
+        try {
+          const prizeData = await getTournamentPrizesAdmin(tournamentId);
+          setPrizes(prizeData);
+          setPrizesError('');
+        } catch (prizeError) {
+          setPrizesError(
+            prizeError instanceof Error
+              ? prizeError.message
+              : 'No fue posible consultar los premios.',
+          );
+        }
       } catch (error) {
         console.error(
           'Error cargando detalle de la Polla:',
@@ -196,6 +218,33 @@ export default function AdminTournamentDetailPage() {
       );
     } finally {
       setApprovingPayment(null);
+    }
+  }
+
+  async function handleClosePrizes() {
+    if (!confirmClose || closingPrizes || prizes?.finalized) {
+      return;
+    }
+
+    try {
+      setClosingPrizes(true);
+      setPrizesError('');
+
+      await closeTournamentPrizes(tournamentId);
+
+      const officialPrizes =
+        await getTournamentPrizesAdmin(tournamentId);
+
+      setPrizes(officialPrizes);
+      setConfirmClose(false);
+    } catch (closeError) {
+      setPrizesError(
+        closeError instanceof Error
+          ? closeError.message
+          : 'No fue posible completar el cierre.',
+      );
+    } finally {
+      setClosingPrizes(false);
     }
   }
 
@@ -347,9 +396,16 @@ export default function AdminTournamentDetailPage() {
                 </p>
 
                 <p className="mt-2 text-2xl font-black">
-                  {tournament.id === 7
-                    ? `${tournament.prize.toLocaleString('es-CO')} (moneda por verificar)`
-                    : `$${tournament.prize.toLocaleString('es-CO')}`}
+                  {prizes?.finalized &&
+                  typeof prizes.prizePoolCOP === 'number'
+                    ? prizes.prizePoolCOP.toLocaleString('es-CO', {
+                        style: 'currency',
+                        currency: 'COP',
+                        maximumFractionDigits: 0,
+                      })
+                    : tournament.id === 7
+                      ? `${tournament.prize.toLocaleString('es-CO')} (moneda por verificar)`
+                      : `$${tournament.prize.toLocaleString('es-CO')}`}
                 </p>
               </div>
 
@@ -398,6 +454,191 @@ export default function AdminTournamentDetailPage() {
                 </p>
               </div>
             </div>
+          </section>
+
+          {/* PREMIOS DEFINITIVOS */}
+          <section className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wider text-red-400">
+                  Premios
+                </p>
+                <h2 className="mt-1 text-2xl font-black">
+                  Cierre definitivo de la Polla
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Consulta los premios y la distribución de ganadores.
+                </p>
+              </div>
+
+              <span className={`rounded-full px-3 py-2 text-xs font-bold ${
+                prizes?.finalized
+                  ? 'bg-emerald-500/15 text-emerald-300'
+                  : 'bg-amber-500/15 text-amber-300'
+              }`}>
+                {prizes?.finalized
+                  ? 'CIERRE DEFINITIVO'
+                  : 'SIN CIERRE DEFINITIVO'}
+              </span>
+            </div>
+
+            {prizesError && (
+              <p role="alert" className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+                {prizesError}
+              </p>
+            )}
+
+            {prizes?.prizes && (
+              <>
+                {/* RESUMEN FINANCIERO ADMINISTRATIVO */}
+                <div className="mt-6">
+                  <h3 className="text-lg font-bold text-white">
+                    Resumen financiero
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Información exclusiva del administrador.
+                    Valores obtenidos del registro financiero de la Polla.
+                  </p>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {[
+                      {
+                        label: 'Total recaudado',
+                        amount: prizes.revenueCOP,
+                        money: true,
+                      },
+                      {
+                        label: 'Bolsa total de premios',
+                        amount: prizes.prizePoolCOP,
+                        money: true,
+                      },
+                      {
+                        label: 'Utilidad de PollaMix',
+                        amount: prizes.profitCOP,
+                        money: true,
+                      },
+                      {
+                        label: 'Participantes pagados',
+                        amount: prizes.registeredPaidPlayers,
+                        money: false,
+                      },
+                    ].map(({ label, amount, money }) => (
+                      <div
+                        key={label}
+                        className="rounded-2xl border border-white/5 bg-slate-950/60 p-5"
+                      >
+                        <p className="text-sm text-slate-400">
+                          {label}
+                        </p>
+                        <p className="mt-2 text-2xl font-black text-white">
+                          {typeof amount === 'number' && Number.isFinite(amount)
+                            ? money
+                              ? amount.toLocaleString('es-CO', {
+                                  style: 'currency',
+                                  currency: 'COP',
+                                  maximumFractionDigits: 0,
+                                })
+                              : amount.toLocaleString('es-CO')
+                            : '—'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                  {[
+                    ['Primer lugar', prizes.prizes.first],
+                    ['Segundo lugar', prizes.prizes.second],
+                    ['Tercer lugar', prizes.prizes.third],
+                  ].map(([label, amount]) => (
+                    <div key={String(label)} className="rounded-xl bg-slate-950/60 p-5">
+                      <p className="text-sm text-slate-400">{label}</p>
+                      <p className="mt-2 text-xl font-black">
+                        {Number(amount).toLocaleString('es-CO', {
+                          style: 'currency',
+                          currency: 'COP',
+                          maximumFractionDigits: 0,
+                        })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="mt-4 text-sm text-slate-400">
+                  Participantes pagados: {prizes.registeredPaidPlayers ?? 0}.
+                  Bolsa: {Number(prizes.prizePoolCOP ?? 0).toLocaleString('es-CO', {
+                    style: 'currency',
+                    currency: 'COP',
+                    maximumFractionDigits: 0,
+                  })}.
+                </p>
+
+                {!!prizes.winners?.length && (
+                  <div className="mt-6 space-y-2">
+                    <h3 className="font-bold">
+                      {prizes.finalized ? 'Ganadores oficiales' : 'Ganadores calculados (provisionales)'}
+                    </h3>
+                    {prizes.winners.map((winner) => (
+                      <div key={winner.userId} className="flex flex-wrap justify-between gap-3 rounded-xl bg-slate-950/60 p-4 text-sm">
+                        <span>
+                          Puesto {winner.position}: {winner.name}
+                          {' '}({winner.points} puntos)
+                        </span>
+                        <strong>
+                          {winner.amountCOP.toLocaleString('es-CO', {
+                            style: 'currency',
+                            currency: 'COP',
+                            maximumFractionDigits: 0,
+                          })}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {prizes?.finalized ? (
+              <p className="mt-6 text-sm text-emerald-300">
+                Resultados definitivos registrados
+                {prizes.closedAt
+                  ? ` el ${new Date(prizes.closedAt).toLocaleString('es-CO')}`
+                  : ''}.
+                No se pueden volver a cerrar los premios.
+              </p>
+            ) : (
+              <div className="mt-6 space-y-4">
+                <p className="text-sm text-amber-200">
+                  Antes de cerrar, los 10 partidos deben estar puntuados,
+                  el torneo finalizado y todos los pagos conciliados.
+                  El servidor mantiene la operación bloqueada hasta
+                  completar la validación final.
+                </p>
+
+                <label className="flex items-start gap-3 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={confirmClose}
+                    onChange={(event) => setConfirmClose(event.target.checked)}
+                    className="mt-1"
+                  />
+                  Confirmo que revisé los resultados y pagos de esta Polla.
+                  Entiendo que el cierre será definitivo.
+                </label>
+
+                <button
+                  type="button"
+                  disabled={!confirmClose || closingPrizes || !prizes}
+                  onClick={handleClosePrizes}
+                  className="rounded-xl bg-red-600 px-6 py-3 font-bold text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {closingPrizes
+                    ? 'Solicitando cierre...'
+                    : 'Solicitar cierre definitivo'}
+                </button>
+              </div>
+            )}
           </section>
 
           {/* CENTRO DE ADMINISTRACIÓN */}

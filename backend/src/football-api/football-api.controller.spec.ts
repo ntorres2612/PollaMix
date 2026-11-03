@@ -7,7 +7,7 @@ describe('FootballApiController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [FootballApiController],
-    }).compile();
+    }).useMocker(() => ({})).compile();
 
     controller = module.get<FootballApiController>(FootballApiController);
   });

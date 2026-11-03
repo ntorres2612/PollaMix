@@ -1,5 +1,6 @@
 import {
   IsDateString,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -25,6 +26,10 @@ export class CreateTournamentDto {
   @IsNumber()
   @Min(0)
   inscription!: number;
+
+  @IsOptional()
+  @IsIn(['COP', 'USD'])
+  currency?: 'COP' | 'USD';
 
   @IsNumber()
   @Min(0)

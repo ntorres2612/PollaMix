@@ -1,3 +1,5 @@
+import { canPublishWinners } from './prizes/prize-publication';
+import { calculatePrizeDistribution } from './prizes/prize-distribution';
 import {
   BadRequestException,
   Injectable,
@@ -78,6 +80,7 @@ export class TournamentsService {
         leagueId: dto.leagueId,
         season: dto.season,
         inscription: dto.inscription,
+        currency: dto.currency ?? 'COP',
         prize: dto.prize,
         maxPlayers: dto.maxPlayers,
         registrationStartsAt,
@@ -433,10 +436,24 @@ export class TournamentsService {
 
         return a.name.localeCompare(b.name);
       })
-      .map((user, index) => ({
-        position: index + 1,
-        ...user,
-      }));
+      .reduce<Array<{
+        position: number;
+        id: number;
+        name: string;
+        points: number;
+      }>>((ranking, user) => {
+        const previous = ranking[ranking.length - 1];
+
+        const position =
+          previous && previous.points === user.points
+            ? previous.position
+            : previous
+              ? previous.position + 1
+              : 1;
+
+        ranking.push({ position, ...user });
+        return ranking;
+      }, []);
   }
 
   // ============================================================
@@ -560,11 +577,11 @@ export class TournamentsService {
       );
     }
 
-    return this.prisma.tournament.update({
-      where: {
-        id,
-      },
-      data,
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Tournament" WHERE id = ${id} FOR UPDATE`;
+      const closure = await tx.tournamentPrizeClosure.findUnique({ where: { tournamentId: id }, select: { id: true } });
+      if (closure) throw new BadRequestException('No se puede editar una Polla con premios cerrados.');
+      return tx.tournament.update({ where: { id }, data });
     });
   }
 
@@ -583,13 +600,11 @@ export class TournamentsService {
       throw new NotFoundException("Torneo no encontrado");
     }
 
-    return this.prisma.tournament.update({
-      where: {
-        id,
-      },
-      data: {
-        active: false,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Tournament" WHERE id = ${id} FOR UPDATE`;
+      const closure = await tx.tournamentPrizeClosure.findUnique({ where: { tournamentId: id }, select: { id: true } });
+      if (closure) throw new BadRequestException('No se puede desactivar una Polla con premios cerrados.');
+      return tx.tournament.update({ where: { id }, data: { active: false } });
     });
   }
 
@@ -697,6 +712,19 @@ export class TournamentsService {
     await this.prisma.$transaction(async (tx) => {
       // El mismo bloqueo debe respetarse en cualquier futuro flujo que cambie la selección.
       await tx.$queryRaw`SELECT id FROM "Tournament" WHERE id = ${tournamentId} FOR UPDATE`;
+
+      // Impedir cambiar partidos después del cierre definitivo.
+      const prizeClosure =
+        await tx.tournamentPrizeClosure.findUnique({
+          where: { tournamentId },
+          select: { id: true },
+        });
+
+      if (prizeClosure) {
+        throw new BadRequestException(
+          'No se pueden modificar los partidos: los premios de esta Polla ya están cerrados.',
+        );
+      }
       const [existingPredictions, confirmedParticipants] = await Promise.all([
         tx.prediction.count({ where: { tournamentId } }),
         tx.tournamentParticipant.count({
@@ -793,12 +821,69 @@ export class TournamentsService {
   // PREMIOS DEFINITIVOS - PUBLICACION AL CIERRE
   // ============================================================
 
+  async getPrizeHistory() {
+    const closures = await this.prisma.tournamentPrizeClosure.findMany({
+      orderBy: { closedAt: 'desc' },
+      take: 30,
+      select: {
+        tournamentId: true,
+        closedAt: true,
+        tournament: {
+          select: {
+            id: true,
+            name: true,
+            season: true,
+          },
+        },
+      },
+    });
+
+    return closures.map((entry) => ({
+      id: entry.tournament.id,
+      name: entry.tournament.name,
+      season: entry.tournament.season,
+      closedAt: entry.closedAt,
+    }));
+  }
+
   async getPrizes(tournamentId: number) {
+    const closure = await this.prisma.tournamentPrizeClosure.findUnique({
+      where: { tournamentId },
+    });
+
+    if (closure) {
+      return {
+        tournamentId,
+        published: true,
+        winnersPublished: true,
+        resultsReady: true,
+        paymentsReady: true,
+        tournamentEnded: true,
+        finalized: true,
+        closedAt: closure.closedAt,
+        currency: closure.currency,
+        registeredPaidPlayers: closure.paidPlayers,
+        revenueCOP: closure.revenueCOP,
+        prizePoolCOP: closure.prizePoolCOP,
+        profitCOP: closure.profitCOP,
+        prizes: {
+          first: closure.firstCOP,
+          second: closure.secondCOP,
+          third: closure.thirdCOP,
+        },
+        winners: closure.winners,
+        allocatedCOP: closure.allocatedCOP,
+        undistributedCOP: closure.undistributedCOP,
+      };
+    }
     const tournament = await this.prisma.tournament.findUnique({
       where: { id: tournamentId },
       select: {
         id: true,
+        inscription: true,
+        currency: true,
         registrationEndsAt: true,
+        endsAt: true,
       },
     });
 
@@ -806,44 +891,162 @@ export class TournamentsService {
       throw new NotFoundException('La Polla no existe.');
     }
 
-    // El servidor decide si se pueden publicar los valores.
+    if (tournament.currency !== 'COP') {
+      throw new BadRequestException(
+        'Este torneo debe utilizar pesos colombianos.',
+      );
+    }
+
+    // Antes del cierre de inscripciones no se publican premios.
     if (new Date() < tournament.registrationEndsAt) {
       return {
         tournamentId,
         published: false,
-        currency: 'USD',
+        winnersPublished: false,
+        currency: 'COP',
         prizes: null,
+        winners: null,
         message: 'Premios pendientes de publicación.',
       };
     }
 
-    // La suma de los pagos aprobados es la única fuente de recaudación.
-    const totals = await this.prisma.payment.aggregate({
+    const payments = await this.prisma.payment.findMany({
       where: {
         tournamentId,
+        currency: 'COP',
         status: 'APPROVED',
       },
-      _sum: { amount: true },
+      select: {
+        userId: true,
+        amount: true,
+      },
     });
 
-    // Trabajamos en centavos para distribuir exactamente el importe.
-    const revenueCents = totals._sum.amount ?? 0;
-    const poolCents = Math.round(revenueCents * 0.70);
+    // Un solo pago aprobado por jugador.
+    const paidUserIds = new Set<number>();
+    let revenueCOP = 0;
 
-    // Distribución provisional entre los tres primeros puestos.
-    const firstCents = Math.round(poolCents * 0.70);
-    const secondCents = Math.round(poolCents * 0.20);
-    const thirdCents = poolCents - firstCents - secondCents;
+    for (const payment of payments) {
+      if (
+        paidUserIds.has(payment.userId) ||
+        !Number.isSafeInteger(payment.amount) ||
+        payment.amount <= 0
+      ) {
+        throw new BadRequestException(
+          'Los pagos aprobados contienen inconsistencias.',
+        );
+      }
+
+      paidUserIds.add(payment.userId);
+      revenueCOP += payment.amount;
+    }
+
+    if (!Number.isSafeInteger(revenueCOP)) {
+      throw new BadRequestException(
+        'La recaudación supera el importe permitido.',
+      );
+    }
+
+    // Se utiliza el mismo motor para el fondo de premios
+    // y para la distribución entre ganadores.
+    const ranking = await this.getRanking(tournamentId);
+
+    const eligible = ranking
+      .filter((player) => paidUserIds.has(player.id))
+      .map((player) => ({
+        userId: player.id,
+        points: player.points,
+        name: player.name,
+      }));
+
+    if (eligible.length !== paidUserIds.size) {
+      throw new BadRequestException(
+        'Hay pagos aprobados sin participante válido.',
+      );
+    }
+
+    // Verificar exclusivamente los partidos seleccionados.
+    const selectedMatches = await this.prisma.tournamentMatch.findMany({
+      where: { tournamentId },
+      select: {
+        match: {
+          select: {
+            finished: true,
+            scoredAt: true,
+            homeScore: true,
+            awayScore: true,
+          },
+        },
+      },
+    });
+
+    const matchesReady =
+      selectedMatches.length > 0 &&
+      selectedMatches.every(({ match }) =>
+        match.finished &&
+        match.scoredAt !== null &&
+        match.homeScore !== null &&
+        match.awayScore !== null
+      );
+
+    // Evitar publicar ganadores con pagos históricos
+    // que no cubren la inscripción actual del torneo.
+    const paymentsReady =
+      paidUserIds.size > 0 &&
+      payments.every(
+        (payment) => payment.amount === tournament.inscription,
+      );
+
+    const tournamentEnded = new Date() >= tournament.endsAt;
+    const winnersReady = canPublishWinners({
+      tournamentEnded,
+      matchesReady,
+      paymentsReady,
+    });
+
+    const distribution = calculatePrizeDistribution(
+      revenueCOP,
+      winnersReady
+        ? eligible.map(({ userId, points }) => ({
+            userId,
+            points,
+          }))
+        : [],
+    );
+
+    const winners = winnersReady
+      ? distribution.winners.map((winner) => ({
+          ...winner,
+          name:
+            eligible.find((p) => p.userId === winner.userId)
+              ?.name ?? '',
+        }))
+      : null;
 
     return {
       tournamentId,
       published: true,
-      currency: 'USD',
+      winnersPublished: winnersReady,
+      resultsReady: matchesReady,
+      paymentsReady,
+      tournamentEnded,
+      currency: 'COP',
+      registeredPaidPlayers: eligible.length,
+      revenueCOP: distribution.revenueCOP,
+      prizePoolCOP: distribution.prizePoolCOP,
+      profitCOP: distribution.profitCOP,
       prizes: {
-        first: firstCents / 100,
-        second: secondCents / 100,
-        third: thirdCents / 100,
+        first: distribution.firstCOP,
+        second: distribution.secondCOP,
+        third: distribution.thirdCOP,
       },
+      winners,
+      allocatedCOP: winnersReady
+        ? distribution.allocatedCOP
+        : null,
+      undistributedCOP: winnersReady
+        ? distribution.undistributedCOP
+        : null,
     };
   }
 }

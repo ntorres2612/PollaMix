@@ -12,6 +12,7 @@ import {
 
 import { useRouter } from "next/navigation";
 
+import BreBPaymentCard from "@/components/payments/BreBPaymentCard";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 
@@ -30,15 +31,19 @@ import { getCurrentUser } from "@/lib/auth";
 
 function formatCurrency(
   value: number,
+  currency: "COP" | "USD" = "COP",
 ) {
-  return new Intl.NumberFormat(
-    "es-CO",
+  const formatted = new Intl.NumberFormat(
+    currency === "USD" ? "en-US" : "es-CO",
     {
       style: "currency",
-      currency: "COP",
-      maximumFractionDigits: 0,
+      currency,
+      minimumFractionDigits: currency === "USD" ? 2 : 0,
+      maximumFractionDigits: currency === "USD" ? 2 : 0,
     },
   ).format(value);
+
+  return currency === "USD" ? `US${formatted}` : formatted;
 }
 
 function formatDate(
@@ -447,9 +452,7 @@ export default function PaymentPage() {
               </p>
 
               <p className="mt-2 text-2xl font-black text-white">
-                {formatCurrency(
-                  tournament.inscription,
-                )}
+                {formatCurrency(tournament.inscription, tournament.currency)}
               </p>
 
             </div>
@@ -461,9 +464,7 @@ export default function PaymentPage() {
               </p>
 
               <p className="mt-2 text-2xl font-black text-white">
-                {formatCurrency(
-                  tournament.prize,
-                )}
+                {formatCurrency(tournament.prize, tournament.currency)}
               </p>
 
             </div>
@@ -593,9 +594,7 @@ export default function PaymentPage() {
                     </span>
 
                     <span className="font-bold text-white">
-                      {formatCurrency(
-                        latestPayment.amount,
-                      )}
+                      {formatCurrency(latestPayment.amount, latestPayment.currency)}
                     </span>
 
                   </div>
@@ -646,6 +645,8 @@ export default function PaymentPage() {
                 Tu solicitud está pendiente de verificación. Todavía no se ha confirmado la recepción del dinero.
               </p>
 
+              <BreBPaymentCard amount={tournament.inscription} currency={tournament.currency} />
+
               {latestPayment && (
 
                 <div className="mx-auto mt-6 max-w-md rounded-2xl border border-white/10 bg-black/10 p-5 text-left">
@@ -669,9 +670,7 @@ export default function PaymentPage() {
                     </span>
 
                     <span className="font-bold text-white">
-                      {formatCurrency(
-                        latestPayment.amount,
-                      )}
+                      {formatCurrency(latestPayment.amount, latestPayment.currency)}
                     </span>
 
                   </div>
@@ -756,9 +755,7 @@ export default function PaymentPage() {
                   </label>
 
                   <div className="mt-2 rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-lg font-black text-white">
-                    {formatCurrency(
-                      tournament.inscription,
-                    )}
+                    {formatCurrency(tournament.inscription, tournament.currency)}
                   </div>
 
                   <p className="mt-2 text-xs text-slate-500">

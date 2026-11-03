@@ -1,3 +1,4 @@
+import { lockMatchForPrizeSafeUpdate } from '../tournaments/prizes/match-prize-lock';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { ScoringService } from '../predictions/scoring/scoring.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -105,12 +106,9 @@ export class MatchesService {
   async update(id: number, dto: UpdateMatchDto) {
     return this.prisma.$transaction(
       async (tx) => {
-        // Serializa actualizaciones simultáneas del mismo partido.
-        await tx.$queryRaw`
-          SELECT id FROM "Match"
-          WHERE id = ${id}
-          FOR UPDATE
-        `;
+        // Bloquear los torneos relacionados y después el partido.
+        // Rechazar modificaciones que afecten premios cerrados.
+        await lockMatchForPrizeSafeUpdate(tx, id);
 
         const current = await tx.match.findUnique({
           where: { id },
@@ -208,14 +206,11 @@ export class MatchesService {
     });
   }
 
-  remove(id: number) {
-
-    return this.prisma.match.delete({
-
-      where: { id },
-
-    });
-
+  async remove(id: number) {
+    return this.prisma.$transaction(async (tx) => {
+      await lockMatchForPrizeSafeUpdate(tx, id);
+      return tx.match.delete({ where: { id } });
+    }, { timeout: 20000 });
   }
 
 }

@@ -7,7 +7,7 @@ describe('FootballApiService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [FootballApiService],
-    }).compile();
+    }).useMocker(() => ({})).compile();
 
     service = module.get<FootballApiService>(FootballApiService);
   });
