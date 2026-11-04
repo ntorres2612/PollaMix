@@ -53,6 +53,9 @@ export class AuthService {
 
           email: dto.email,
 
+          phone: dto.phone,
+          rulesAcceptedAt: new Date(),
+          rulesVersion: '2026-11-03-v1',
           password,
 
         },

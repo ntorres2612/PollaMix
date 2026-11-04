@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Post,
+  UsePipes,
+  ValidationPipe,
   UseGuards,
 } from '@nestjs/common';
 
@@ -33,6 +35,11 @@ export class AuthController {
     summary: 'Registrar usuario',
   })
   @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @UsePipes(new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  }))
   @Post('register')
   register(
     @Body() dto: RegisterDto,

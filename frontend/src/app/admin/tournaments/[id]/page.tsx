@@ -574,6 +574,31 @@ export default function AdminTournamentDetailPage() {
                   })}.
                 </p>
 
+                {prizes?.finalized && (
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5">
+                    <div>
+                      <h3 className="font-bold text-white">
+                        Contacto de ganadores
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-400">
+                        Consulta los datos de contacto de los premiados definitivos.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          `/admin/tournaments/${tournament.id}/ganadores`
+                        )
+                      }
+                      className="rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-500"
+                    >
+                      Contactar ganadores
+                    </button>
+                  </div>
+                )}
+
                 {!!prizes.winners?.length && (
                   <div className="mt-6 space-y-2">
                     <h3 className="font-bold">

@@ -98,6 +98,153 @@ export class TournamentsService {
   // TORNEO ACTUAL
   // ============================================================
 
+  async getHomeStats() {
+    const now = new Date();
+
+    const tournament = await this.prisma.tournament.findFirst({
+      where: {
+        active: true,
+        endsAt: { gt: now },
+      },
+      orderBy: [
+        { startsAt: 'desc' },
+        { id: 'desc' },
+      ],
+      select: {
+        id: true,
+        name: true,
+        maxPlayers: true,
+        startsAt: true,
+        registrationStartsAt: true,
+        registrationEndsAt: true,
+        endsAt: true,
+      },
+    });
+
+    if (!tournament) {
+      return null;
+    }
+
+    const registered = await this.prisma.tournamentParticipant.count({
+      where: { tournamentId: tournament.id },
+    });
+
+    const hasLimit = tournament.maxPlayers > 0;
+
+    const registrationOpen =
+      now >= tournament.registrationStartsAt &&
+      now < tournament.registrationEndsAt &&
+      now < tournament.startsAt &&
+      (!hasLimit || registered < tournament.maxPlayers);
+
+    return {
+      tournamentId: tournament.id,
+      name: tournament.name,
+      registered,
+      registrationStartsAt: tournament.registrationStartsAt,
+      registrationEndsAt: tournament.registrationEndsAt,
+      startsAt: tournament.startsAt,
+      endsAt: tournament.endsAt,
+      maxPlayers: hasLimit ? tournament.maxPlayers : null,
+      available: hasLimit
+        ? Math.max(0, tournament.maxPlayers - registered)
+        : null,
+      registrationOpen,
+    };
+  }
+
+  async getWinnerContacts(tournamentId: number) {
+    if (!Number.isSafeInteger(tournamentId) || tournamentId <= 0) {
+      throw new BadRequestException('Torneo inválido.');
+    }
+
+    const closure = await this.prisma.tournamentPrizeClosure.findUnique({
+      where: { tournamentId },
+      select: {
+        tournamentId: true,
+        winners: true,
+        closedAt: true,
+        currency: true,
+      },
+    });
+
+    if (!closure) {
+      return {
+        tournamentId,
+        finalized: false,
+        winners: [],
+        message: 'Este torneo todavía no tiene ganadores definitivos.',
+      };
+    }
+
+    if (!Array.isArray(closure.winners)) {
+      throw new Error('El cierre no contiene una lista válida de ganadores.');
+    }
+
+    type StoredWinner = {
+      userId: number;
+      position?: number;
+      rank?: number;
+      points?: number;
+      amountCOP?: number;
+    };
+
+    const winners = closure.winners as StoredWinner[];
+
+    if (winners.some(
+      (winner) =>
+        !winner ||
+        !Number.isSafeInteger(winner.userId) ||
+        winner.userId <= 0
+    )) {
+      throw new Error('Los ganadores almacenados tienen IDs inválidos.');
+    }
+
+    const userIds = [...new Set(winners.map((winner) => winner.userId))];
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+      },
+    });
+
+    const byId = new Map(users.map((user) => [user.id, user]));
+
+    if (users.length !== userIds.length) {
+      throw new Error('No se encontraron todos los usuarios premiados.');
+    }
+
+    return {
+      tournamentId,
+      finalized: true,
+      closedAt: closure.closedAt,
+      currency: closure.currency,
+      winners: winners.map((winner, index) => ({
+        userId: winner.userId,
+        position:
+          Number.isSafeInteger(winner.position)
+            ? winner.position
+            : Number.isSafeInteger(winner.rank)
+              ? winner.rank
+              : null,
+        order: index + 1,
+        points: typeof winner.points === 'number'
+          ? winner.points
+          : null,
+        amountCOP: typeof winner.amountCOP === 'number'
+          ? winner.amountCOP
+          : null,
+        name: byId.get(winner.userId)!.name,
+        email: byId.get(winner.userId)!.email,
+        phone: byId.get(winner.userId)!.phone,
+      })),
+    };
+  }
+
   async getCurrent() {
     const now = new Date();
 

@@ -12,6 +12,7 @@ const publicLinks: NavItem[] = [
   { href: "/jornadas", label: "Jornadas" },
   { href: "/clasificacion", label: "Clasificación" },
   { href: "/premios", label: "Premios" },
+  { href: "/reglas", label: "Reglamento" },
 ];
 
 const playerLinks: NavItem[] = [
@@ -39,7 +40,12 @@ export default function Navbar() {
 
   const isAdmin = user?.role === "ADMIN";
   const isPlayer = user?.role === "PLAYER";
-  const roleLinks = isAdmin ? adminLinks : isPlayer ? playerLinks : [];
+  const roleLinks = user
+    ? [
+        ...(isAdmin ? adminLinks : isPlayer ? playerLinks : []),
+        { href: "/perfil", label: "Mi perfil" },
+      ]
+    : [];
   const roleTitle = isAdmin ? "Administración" : "Mi juego";
 
   function isActive(href: string) {

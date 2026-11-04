@@ -39,6 +39,11 @@ export class TournamentsController {
     return this.tournamentsService.findAll();
   }
 
+  @Get('home-stats')
+  getHomeStats() {
+    return this.tournamentsService.getHomeStats();
+  }
+
   @Get('current')
   getCurrent() {
     return this.tournamentsService.getCurrent();
@@ -70,6 +75,13 @@ export class TournamentsController {
   @Get('prizes/history')
   getPrizeHistory() {
     return this.tournamentsService.getPrizeHistory();
+  }
+
+  @Get(':id/winners/contacts')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  getWinnerContacts(@Param('id') id: string) {
+    return this.tournamentsService.getWinnerContacts(Number(id));
   }
 
   @Get(':id/prizes/admin')

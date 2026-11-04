@@ -1,14 +1,14 @@
 import CurrentTournamentMatches from "@/components/match/CurrentTournamentMatches";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import Hero from "@/components/home/Hero";
+import HeroV2 from "@/components/home/HeroV2";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#071321] text-white">
+    <main className="min-h-screen bg-[#071321] pt-20 text-white">
       <Header />
 
-      <Hero />
+      <HeroV2 />
 
       <CurrentTournamentMatches />
 
