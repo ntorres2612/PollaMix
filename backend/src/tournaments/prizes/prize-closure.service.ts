@@ -346,6 +346,188 @@ export class PrizeClosureService {
     );
   }
 
+  // POLLAMIX_RESOLVE_CLAIM_WITHOUT_CORRECTION
+  async resolveClaimWithoutCorrection(
+    tournamentId: number,
+    claimId: number,
+    adminId: number,
+    reasonInput: unknown,
+    verifiedInput: unknown,
+  ) {
+    const identifiers = [tournamentId, claimId, adminId];
+
+    if (
+      identifiers.some(
+        (value) => !Number.isSafeInteger(value) || value <= 0,
+      )
+    ) {
+      throw new BadRequestException(
+        'Los identificadores no son válidos.',
+      );
+    }
+
+    if (
+      typeof reasonInput !== 'string' ||
+      reasonInput.trim().length < 20 ||
+      reasonInput.trim().length > 2000
+    ) {
+      throw new BadRequestException(
+        'La justificación debe tener entre 20 y 2000 caracteres.',
+      );
+    }
+
+    if (verifiedInput !== true) {
+      throw new BadRequestException(
+        'Debes confirmar que no se requiere modificar el marcador.',
+      );
+    }
+
+    const reason = reasonInput.trim();
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        // Orden de bloqueo compartido con decisiones y cierre:
+        // Tournament primero, TournamentClaim después.
+        const tournamentRows = await tx.$queryRaw<
+          Array<{ id: number }>
+        >`
+          SELECT id FROM "Tournament"
+          WHERE id = ${tournamentId}
+          FOR UPDATE
+        `;
+
+        if (tournamentRows.length !== 1) {
+          throw new NotFoundException(
+            'La Polla no existe.',
+          );
+        }
+
+        const tournament = await tx.tournament.findUniqueOrThrow({
+          where: { id: tournamentId },
+          select: { resultsPublishedAt: true },
+        });
+
+        if (!tournament.resultsPublishedAt) {
+          throw new BadRequestException(
+            'Los resultados todavía no están publicados.',
+          );
+        }
+
+        const closure = await tx.tournamentPrizeClosure.findUnique({
+          where: { tournamentId },
+          select: { id: true },
+        });
+
+        if (closure) {
+          throw new BadRequestException(
+            'La Polla tiene premios definitivamente cerrados.',
+          );
+        }
+
+        const admin = await tx.user.findUnique({
+          where: { id: adminId },
+          select: { id: true, role: true },
+        });
+
+        if (!admin || admin.role !== 'ADMIN') {
+          throw new BadRequestException(
+            'El administrador no es válido.',
+          );
+        }
+
+        const claimRows = await tx.$queryRaw<
+          Array<{ id: number }>
+        >`
+          SELECT id FROM "TournamentClaim"
+          WHERE id = ${claimId}
+            AND "tournamentId" = ${tournamentId}
+          FOR UPDATE
+        `;
+
+        if (claimRows.length !== 1) {
+          throw new NotFoundException(
+            'La reclamación no existe en esta Polla.',
+          );
+        }
+
+        const claim = await tx.tournamentClaim.findUniqueOrThrow({
+          where: { id: claimId },
+          select: {
+            status: true,
+            resolvedAt: true,
+            resultCorrection: {
+              select: { id: true },
+            },
+            noCorrectionResolution: {
+              select: { id: true },
+            },
+          },
+        });
+
+        if (
+          claim.status !== 'ACCEPTED' ||
+          claim.resolvedAt !== null ||
+          claim.resultCorrection !== null ||
+          claim.noCorrectionResolution !== null
+        ) {
+          throw new BadRequestException(
+            'La reclamación no está aceptada y pendiente de resolución.',
+          );
+        }
+
+        const resolvedAt = new Date();
+
+        // Ambas escrituras pertenecen a la misma transacción.
+        const updated = await tx.tournamentClaim.updateMany({
+          where: {
+            id: claimId,
+            tournamentId,
+            status: 'ACCEPTED',
+            resolvedAt: null,
+          },
+          data: { resolvedAt },
+        });
+
+        if (updated.count !== 1) {
+          throw new BadRequestException(
+            'La reclamación cambió de estado. Reintenta.',
+          );
+        }
+
+        const audit =
+          await tx.tournamentClaimNoCorrectionResolution.create({
+            data: {
+              claimId,
+              adminId,
+              reason,
+              resolvedAt,
+            },
+            select: {
+              id: true,
+              claimId: true,
+              adminId: true,
+              reason: true,
+              resolvedAt: true,
+            },
+          });
+
+        return {
+          tournamentId,
+          claimId,
+          status: 'ACCEPTED' as const,
+          resolvedAt,
+          resolutionType: 'WITHOUT_CORRECTION' as const,
+          audit,
+        };
+      },
+      {
+        isolationLevel:
+          Prisma.TransactionIsolationLevel.Serializable,
+        timeout: 10000,
+      },
+    );
+  }
+
   // POLLAMIX_OFFICIAL_CLAIM_CORRECTION
   async applyClaimCorrection(
     tournamentId: number,

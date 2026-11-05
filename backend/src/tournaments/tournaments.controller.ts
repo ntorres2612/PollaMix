@@ -108,6 +108,32 @@ export class TournamentsController {
     );
   }
 
+  // POLLAMIX_RESOLVE_CLAIM_WITHOUT_CORRECTION_ENDPOINT
+  @Post(':id/claims/:claimId/resolve-without-correction')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  resolveClaimWithoutCorrection(
+    @Param('id') id: string,
+    @Param('claimId') claimId: string,
+    @Req() req: any,
+    @Body() body: unknown,
+  ) {
+    const data =
+      body !== null &&
+      typeof body === 'object' &&
+      !Array.isArray(body)
+        ? body as Record<string, unknown>
+        : {};
+
+    return this.prizeClosureService.resolveClaimWithoutCorrection(
+      Number(id),
+      Number(claimId),
+      Number(req.user.id),
+      data.reason,
+      data.noCorrectionVerified,
+    );
+  }
+
   // POLLAMIX_OFFICIAL_CORRECTION_ENDPOINT
   @Post(':id/claims/:claimId/apply-correction')
   @UseGuards(JwtAuthGuard, RolesGuard)

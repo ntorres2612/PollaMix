@@ -17,6 +17,7 @@ import {
 } from "@/lib/claims";
 
 import AdminClaimCorrection from "@/components/claims/AdminClaimCorrection";
+import AdminClaimNoCorrectionResolution from "@/components/claims/AdminClaimNoCorrectionResolution";
 
 const statusLabels = {
   PENDING: "Pendiente",
@@ -43,8 +44,8 @@ function ClaimStatus({
       {claim.status === "ACCEPTED" && (
         <span className="text-xs text-amber-300">
           {resolved
-            ? "Corrección resuelta"
-            : "Corrección pendiente"}
+            ? "Resuelta"
+            : "Resolución pendiente"}
         </span>
       )}
     </div>
@@ -178,7 +179,7 @@ export default function AdminTournamentClaimsPage() {
 
       setSuccess(
         decisionStatus === "ACCEPTED"
-          ? "Reclamación aceptada. Debes aplicar la corrección oficial para resolverla."
+          ? "Reclamación aceptada. Debes resolverla mediante corrección oficial o resolución sin modificar marcador."
           : "Reclamación rechazada y resuelta.",
       );
 
@@ -230,8 +231,9 @@ export default function AdminTournamentClaimsPage() {
 
         <p className="mt-3 text-slate-400">
           Consulta administrativa de reclamaciones.
-          Las decisiones y correcciones no están habilitadas
-          en esta pantalla todavía.
+          Puedes aceptar, rechazar y resolver reclamaciones
+          mediante una corrección oficial o una resolución
+          administrativa sin cambio de marcador.
         </p>
 
         <button
@@ -434,11 +436,18 @@ export default function AdminTournamentClaimsPage() {
 
                   {claim.status === "ACCEPTED" &&
                     claim.resolvedAt === null && (
-                      <AdminClaimCorrection
-                        tournamentId={tournamentId}
-                        claimId={claim.id}
-                        onSuccess={refreshClaimsAfterMutation}
-                      />
+                      <>
+                        <AdminClaimCorrection
+                          tournamentId={tournamentId}
+                          claimId={claim.id}
+                          onSuccess={refreshClaimsAfterMutation}
+                        />
+                        <AdminClaimNoCorrectionResolution
+                          tournamentId={tournamentId}
+                          claimId={claim.id}
+                          onSuccess={refreshClaimsAfterMutation}
+                        />
+                      </>
                     )}
 
                   {claim.decision && (

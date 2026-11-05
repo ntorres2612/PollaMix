@@ -209,3 +209,49 @@ export async function applyTournamentClaimCorrection(
     },
   );
 }
+
+/**
+ * ADMIN
+ * Resolver una reclamación aceptada sin cambiar el marcador.
+ */
+export interface NoCorrectionResolutionResponse {
+  tournamentId: number;
+  claimId: number;
+  status: "ACCEPTED";
+  resolvedAt: string;
+  resolutionType: "WITHOUT_CORRECTION";
+  audit: {
+    id: number;
+    claimId: number;
+    adminId: number;
+    reason: string;
+    resolvedAt: string;
+  };
+}
+
+export async function resolveTournamentClaimWithoutCorrection(
+  tournamentId: number,
+  claimId: number,
+  reason: string,
+  verified: boolean,
+): Promise<NoCorrectionResolutionResponse> {
+  validateId(tournamentId);
+  validateId(claimId);
+
+  if (verified !== true) {
+    throw new Error(
+      "Debes confirmar que no es necesario modificar el marcador.",
+    );
+  }
+
+  return apiFetch<NoCorrectionResolutionResponse>(
+    `/tournaments/${tournamentId}/claims/${claimId}/resolve-without-correction`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        reason: validateReason(reason),
+        noCorrectionVerified: true,
+      }),
+    },
+  );
+}

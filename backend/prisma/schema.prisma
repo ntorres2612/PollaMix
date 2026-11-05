@@ -35,6 +35,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   tournamentClaims TournamentClaim[]
   resultCorrections TournamentResultCorrection[]
+  noCorrectionResolutions TournamentClaimNoCorrectionResolution[]
 }
 
 model League {
@@ -308,6 +309,7 @@ model TournamentClaim {
   @@index([userId])
   @@index([createdAt])
   resultCorrection TournamentResultCorrection?
+  noCorrectionResolution TournamentClaimNoCorrectionResolution?
 }
 
 
@@ -340,4 +342,22 @@ model TournamentResultCorrection {
   @@index([matchId])
   @@index([adminId])
   @@index([appliedAt])
+}
+
+// Auditoría de reclamaciones aceptadas
+// resueltas sin modificar resultados oficiales.
+model TournamentClaimNoCorrectionResolution {
+  id Int @id @default(autoincrement())
+
+  claimId Int @unique
+  claim TournamentClaim @relation(fields: [claimId], references: [id], onDelete: Restrict)
+
+  adminId Int
+  admin User @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  reason String
+  resolvedAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([resolvedAt])
 }
