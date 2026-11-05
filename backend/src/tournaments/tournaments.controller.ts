@@ -49,6 +49,15 @@ export class TournamentsController {
     return this.tournamentsService.getCurrent();
   }
 
+  // Historial propio de Pollas, incluidas las finalizadas.
+  @Get('my-history')
+  @UseGuards(JwtAuthGuard)
+  getMyHistory(@Req() req: any) {
+    return this.tournamentsService.getMyTournamentHistory(
+      Number(req.user.id),
+    );
+  }
+
   @Get('my-current')
   @UseGuards(JwtAuthGuard)
   getMyCurrent(@Req() req: any) {

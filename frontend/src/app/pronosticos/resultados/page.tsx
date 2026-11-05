@@ -3,7 +3,6 @@
 import Link from "next/link";
 
 import {
-  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -11,13 +10,14 @@ import {
 
 import { useRouter } from "next/navigation";
 
+import PlayerClaimForm from "@/components/claims/PlayerClaimForm";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, logout } from "@/lib/auth";
 
 import {
-  getCurrentPlayerTournament,
+  getMyTournamentHistory,
   getTournamentMyStatus,
   Tournament,
   TournamentParticipationStatus,
@@ -59,6 +59,12 @@ export default function PredictionResultsPage() {
       null,
     );
 
+  const [tournaments, setTournaments] =
+    useState<Tournament[]>([]);
+
+  const [selectedTournamentId, setSelectedTournamentId] =
+    useState<number | null>(null);
+
   const [
     tournamentStatus,
     setTournamentStatus,
@@ -95,99 +101,101 @@ export default function PredictionResultsPage() {
   ] =
     useState("");
 
-  const loadData = useCallback(
-    async () => {
+  useEffect(() => {
+    let active = true;
+
+    const user = getCurrentUser();
+
+    if (!user) {
+      router.replace("/login");
+      return () => {
+        active = false;
+      };
+    }
+
+    async function loadData() {
+      setLoading(true);
+      setError("");
+
       try {
-        setLoading(true);
-        setError("");
+        const history = await getMyTournamentHistory();
 
-        const currentTournament =
-          await getCurrentPlayerTournament();
+        if (!active) return;
 
-        setTournament(
-          currentTournament,
-        );
+        setTournaments(history);
 
-        if (!currentTournament) {
-          setTournamentStatus(
-            null,
-          );
+        const chosen =
+          history.find(
+            (item) => item.id === selectedTournamentId,
+          ) ?? (selectedTournamentId === null ? history[0] : null);
 
+        if (!chosen) {
+          setTournament(null);
+          setTournamentStatus(null);
           setMatches([]);
           setPredictions([]);
-
           return;
         }
 
-        const [
-          status,
-          selectedMatches,
-          myPredictions,
-        ] =
+        const [status, selectedMatches, myPredictions] =
           await Promise.all([
-            getTournamentMyStatus(
-              currentTournament.id,
-            ),
-
-            getPredictionMatches(
-              currentTournament.id,
-            ),
-
+            getTournamentMyStatus(chosen.id),
+            getPredictionMatches(chosen.id),
             getMyPredictions(),
           ]);
 
-        setTournamentStatus(
-          status,
-        );
+        if (!active) return;
 
-        setMatches(
-          selectedMatches,
-        );
+        setTournament(chosen);
+        setTournamentStatus(status);
+        setMatches(selectedMatches);
 
         const selectedMatchIds = new Set(
           selectedMatches.map((match) => match.id),
         );
 
-        const validPredictions = myPredictions.filter(
-          (prediction) =>
-            prediction.tournamentId === currentTournament.id &&
-            selectedMatchIds.has(prediction.matchId),
+        setPredictions(
+          myPredictions.filter(
+            (prediction) =>
+              prediction.tournamentId === chosen.id &&
+              selectedMatchIds.has(prediction.matchId),
+          ),
         );
-
-        setPredictions(validPredictions);
-        
       } catch (err) {
-        console.error(
-          "Error cargando resultados:",
-          err,
-        );
+        if (!active) return;
 
-        setError(
+        const message =
           err instanceof Error
             ? err.message
-            : "No fue posible cargar los resultados.",
-        );
+            : "No fue posible cargar los resultados.";
+
+        if (
+          message === "Unauthorized" ||
+          message.toLowerCase().includes("jwt expired")
+        ) {
+          logout();
+          router.replace("/login");
+          return;
+        }
+
+        setError(message);
+        setTournament(null);
+        setTournamentStatus(null);
+        setMatches([]);
+        setPredictions([]);
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const user =
-      getCurrentUser();
-
-    if (!user) {
-      router.push("/login");
-      return;
     }
 
-    loadData();
-  }, [
-    router,
-    loadData,
-  ]);
+    void loadData();
+
+    return () => {
+      active = false;
+    };
+  }, [router, selectedTournamentId]);
 
   const completedPredictions =
     predictions.length;
@@ -273,11 +281,14 @@ export default function PredictionResultsPage() {
             </p>
 
             <h1 className="mt-3 text-3xl font-black">
-              No tienes una Polla activa
+              {error
+                ? "No fue posible cargar tus Pollas"
+                : "No tienes Pollas registradas"}
             </h1>
 
             <p className="mx-auto mt-3 max-w-xl text-slate-400">
-              Actualmente no encontramos una Polla activa asociada a tu cuenta.
+              {error ||
+                "No encontramos Pollas asociadas a tu cuenta."}
             </p>
 
             <Link
@@ -322,6 +333,34 @@ export default function PredictionResultsPage() {
             {tournament.name}
           </p>
         </div>
+
+        {/* Selección de Polla propia */}
+
+        {tournaments.length > 1 && (
+          <section className="mb-8 rounded-2xl border border-white/10 bg-slate-900/70 p-5">
+            <label
+              htmlFor="results-tournament"
+              className="block text-sm font-bold text-white"
+            >
+              Seleccionar mi Polla
+            </label>
+
+            <select
+              id="results-tournament"
+              value={selectedTournamentId ?? tournament?.id ?? ""}
+              onChange={(event) =>
+                setSelectedTournamentId(Number(event.target.value))
+              }
+              className="mt-3 w-full rounded-xl border border-white/15 bg-slate-950 p-3 text-sm text-white"
+            >
+              {tournaments.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </section>
+        )}
 
         {/* Estado */}
 
@@ -445,6 +484,12 @@ export default function PredictionResultsPage() {
           </div>
 
         </section>
+
+        {/* Reclamaciones */}
+
+        {tournamentStatus?.isParticipant && (
+          <PlayerClaimForm tournamentId={tournament.id} />
+        )}
 
         {/* Resultados */}
 

@@ -52,6 +52,18 @@ export async function getCurrentTournament(): Promise<
   );
 }
 
+/**
+ * Obtiene las Pollas en las que está inscrito
+ * el usuario autenticado, incluidas las finalizadas.
+ *
+ * GET /tournaments/my-history
+ */
+export async function getMyTournamentHistory(): Promise<Tournament[]> {
+  return apiFetch<Tournament[]>(
+    "/tournaments/my-history",
+  );
+}
+
 export async function getCurrentPlayerTournament(): Promise<
   Tournament | null
 > {

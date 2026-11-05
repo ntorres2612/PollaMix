@@ -677,7 +677,7 @@ export default function AdminTournamentDetailPage() {
                 Accede a los módulos de gestión del torneo.
               </p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[
                 {
                   title: 'Participantes y pagos',
@@ -698,6 +698,11 @@ export default function AdminTournamentDetailPage() {
                   title: 'Clasificación',
                   description: 'Consultar el ranking completo',
                   path: 'ranking',
+                },
+                {
+                  title: 'Reclamaciones',
+                  description: 'Consultar reclamaciones y decisiones administrativas',
+                  path: 'claims',
                 },
               ].map((item) => (
                 <button

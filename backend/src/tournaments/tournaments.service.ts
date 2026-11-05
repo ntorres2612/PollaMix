@@ -284,6 +284,54 @@ export class TournamentsService {
   // TORNEO ACTUAL DEL USUARIO
   // ============================================================
 
+  // ============================================================
+  // HISTORIAL DE POLLAS DEL USUARIO AUTENTICADO
+  // Incluye torneos finalizados sin cambiar my-current.
+  // ============================================================
+
+  async getMyTournamentHistory(userId: number) {
+    if (!Number.isSafeInteger(userId) || userId <= 0) {
+      return [];
+    }
+
+    const participations =
+      await this.prisma.tournamentParticipant.findMany({
+        where: {
+          userId,
+        },
+        select: {
+          tournament: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              leagueId: true,
+              season: true,
+              inscription: true,
+              currency: true,
+              prize: true,
+              maxPlayers: true,
+              registrationStartsAt: true,
+              registrationEndsAt: true,
+              startsAt: true,
+              endsAt: true,
+              active: true,
+              resultsPublishedAt: true,
+              resultsRevisedAt: true,
+            },
+          },
+        },
+        orderBy: [
+          { tournament: { startsAt: "desc" } },
+          { tournamentId: "desc" },
+        ],
+      });
+
+    return participations.map(
+      (participation) => participation.tournament,
+    );
+  }
+
   async getCurrentForUser(userId: number) {
     const now = new Date();
 
