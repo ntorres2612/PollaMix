@@ -60,6 +60,74 @@ export class TournamentsController {
     return this.tournamentsService.getRanking(Number(id));
   }
 
+  // POLLAMIX_PUBLISH_RESULTS_ENDPOINT
+  @Post(':id/publish-results')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  publishResults(@Param('id') id: string) {
+    return this.prizeClosureService.publishResults(Number(id));
+  }
+
+  // POLLAMIX_ADMIN_CLAIMS_ENDPOINTS
+  @Get(':id/claims')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  listClaims(@Param('id') id: string) {
+    return this.prizeClosureService.listClaims(Number(id));
+  }
+
+  @Patch(':id/claims/:claimId/decision')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  decideClaim(
+    @Param('id') id: string,
+    @Param('claimId') claimId: string,
+    @Body() body: unknown,
+  ) {
+    const data =
+      body !== null &&
+      typeof body === 'object' &&
+      !Array.isArray(body)
+        ? body as Record<string, unknown>
+        : {};
+
+    return this.prizeClosureService.decideClaim(
+      Number(id),
+      Number(claimId),
+      data.status,
+      data.decision,
+    );
+  }
+
+  // POLLAMIX_OFFICIAL_CORRECTION_ENDPOINT
+  @Post(':id/claims/:claimId/apply-correction')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  applyClaimCorrection(
+    @Param('id') id: string,
+    @Param('claimId') claimId: string,
+    @Req() req: any,
+    @Body() body: unknown,
+  ) {
+    const data =
+      body !== null &&
+      typeof body === 'object' &&
+      !Array.isArray(body)
+        ? body as Record<string, unknown>
+        : {};
+
+    return this.prizeClosureService.applyClaimCorrection(
+      Number(id),
+      Number(claimId),
+      Number(req.user.id),
+      Number(data.matchId),
+      data.homeScore as number,
+      data.awayScore as number,
+      data.reason,
+      data.officialResultVerified,
+    );
+  }
+
   @Post(':id/close-prizes')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')

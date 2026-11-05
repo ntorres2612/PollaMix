@@ -12,6 +12,9 @@ describe('ScoringService', () => {
     tournamentPrizeClosure: {
       findFirst: jest.fn(),
     },
+    tournament: {
+      findFirst: jest.fn(),
+    },
 
     $queryRaw: jest.fn(),
     match: {
@@ -47,6 +50,7 @@ describe('ScoringService', () => {
   beforeEach(() => {
     tx.tournamentMatch.findMany.mockResolvedValue([]);
     tx.tournamentPrizeClosure.findFirst.mockResolvedValue(null);
+    tx.tournament.findFirst.mockResolvedValue(null);
   });
 
 
@@ -81,6 +85,21 @@ describe('ScoringService', () => {
       where: { id: 100 },
       data: { scoredAt: expect.any(Date) },
     });
+  });
+
+  it('impide puntuar un partido con resultados publicados', async () => {
+    tx.tournament.findFirst.mockResolvedValue({
+      id: 99,
+    });
+
+    await expect(
+      service.scoreMatch(100),
+    ).rejects.toThrow(
+      'No se permite modificar un partido asociado a resultados ya publicados.',
+    );
+
+    expect(tx.prediction.update).not.toHaveBeenCalled();
+    expect(tx.match.update).not.toHaveBeenCalled();
   });
 
   it('rechaza un partido no finalizado', async () => {

@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum TournamentClaimStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 enum UserRole {
   PLAYER
   ADMIN
@@ -27,6 +33,8 @@ model User {
   payments     Payment[]
   participants TournamentParticipant[]
   passwordResetTokens PasswordResetToken[]
+  tournamentClaims TournamentClaim[]
+  resultCorrections TournamentResultCorrection[]
 }
 
 model League {
@@ -77,6 +85,9 @@ model Tournament {
   predictions  Prediction[]
   payments     Payment[]
   prizeClosure TournamentPrizeClosure?
+  resultsPublishedAt DateTime?
+  claims TournamentClaim[]
+  resultsRevisedAt DateTime?
 }
 
 model TournamentParticipant {
@@ -161,6 +172,7 @@ model Match {
   @@index([matchdayId])
   @@index([leagueId])
   @@index([date])
+  resultCorrections TournamentResultCorrection[]
 }
 
 model Prediction {
@@ -274,4 +286,58 @@ model PasswordResetToken {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model TournamentClaim {
+  id Int @id @default(autoincrement())
+
+  tournamentId Int
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Restrict)
+
+  userId Int
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  reason String
+  status TournamentClaimStatus @default(PENDING)
+
+  decision String?
+  createdAt DateTime @default(now())
+  resolvedAt DateTime?
+
+  @@index([tournamentId, status])
+  @@index([userId])
+  @@index([createdAt])
+  resultCorrection TournamentResultCorrection?
+}
+
+
+// Auditoría de correcciones oficiales.
+// Una corrección requiere una reclamación aceptada.
+// La aplicación y el registro deben realizarse
+// dentro de la misma transacción.
+model TournamentResultCorrection {
+  id Int @id @default(autoincrement())
+
+  claimId Int @unique
+  claim TournamentClaim @relation(fields: [claimId], references: [id], onDelete: Restrict)
+
+  matchId Int
+  match Match @relation(fields: [matchId], references: [id], onDelete: Restrict)
+
+  adminId Int
+  admin User @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  oldHomeScore Int
+  oldAwayScore Int
+
+  newHomeScore Int
+  newAwayScore Int
+
+  reason String
+
+  appliedAt DateTime @default(now())
+
+  @@index([matchId])
+  @@index([adminId])
+  @@index([appliedAt])
 }

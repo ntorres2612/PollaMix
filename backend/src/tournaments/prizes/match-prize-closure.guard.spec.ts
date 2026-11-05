@@ -16,6 +16,9 @@ describe('Protección de partidos con premios cerrados', () => {
     tournamentPrizeClosure: {
       findFirst: jest.fn(),
     },
+    tournament: {
+      findFirst: jest.fn(),
+    },
   };
 
   beforeEach(() => {
@@ -26,6 +29,9 @@ describe('Protección de partidos con premios cerrados', () => {
     });
 
     tx.tournamentPrizeClosure.findFirst
+      .mockResolvedValue(null);
+
+    tx.tournament.findFirst
       .mockResolvedValue(null);
   });
 
@@ -64,6 +70,30 @@ describe('Protección de partidos con premios cerrados', () => {
     await expect(
       assertMatchNotPrizeClosed(client(), 100),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('bloquea un partido con resultados publicados', async () => {
+    tx.tournament.findFirst.mockResolvedValue({
+      id: 9,
+    });
+
+    await expect(
+      assertMatchNotPrizeClosed(client(), 100),
+    ).rejects.toThrow(
+      'No se permite modificar un partido asociado a resultados ya publicados.',
+    );
+
+    expect(
+      tx.tournament.findFirst,
+    ).toHaveBeenCalledWith({
+      where: {
+        resultsPublishedAt: { not: null },
+        tournamentMatches: {
+          some: { matchId: 100 },
+        },
+      },
+      select: { id: true },
+    });
   });
 
   it('rechaza partidos inexistentes', async () => {

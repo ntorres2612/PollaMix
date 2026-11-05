@@ -19,6 +19,185 @@ export class TournamentParticipantsService {
     private readonly prisma: PrismaService,
   ) {}
 
+  // POLLAMIX_PLAYER_CLAIMS_48H
+  async createClaim(
+    tournamentId: number,
+    userId: number,
+    reasonInput: unknown,
+  ) {
+    if (
+      !Number.isSafeInteger(tournamentId) ||
+      tournamentId <= 0 ||
+      !Number.isSafeInteger(userId) ||
+      userId <= 0
+    ) {
+      throw new BadRequestException(
+        'Los datos de la reclamación no son válidos.',
+      );
+    }
+
+    if (typeof reasonInput !== 'string') {
+      throw new BadRequestException(
+        'Debes describir el motivo de la reclamación.',
+      );
+    }
+
+    const reason = reasonInput.trim();
+
+    if (reason.length < 20 || reason.length > 2000) {
+      throw new BadRequestException(
+        'La descripción debe tener entre 20 y 2000 caracteres.',
+      );
+    }
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        // Mismo bloqueo de torneo utilizado por el cierre.
+        // Serializa las reclamaciones del mismo torneo.
+        const rows = await tx.$queryRaw<Array<{ id: number }>>`
+          SELECT id
+          FROM "Tournament"
+          WHERE id = ${tournamentId}
+          FOR UPDATE
+        `;
+
+        if (rows.length === 0) {
+          throw new NotFoundException('La Polla no existe.');
+        }
+
+        const tournament = await tx.tournament.findUniqueOrThrow({
+          where: { id: tournamentId },
+          select: { resultsPublishedAt: true, resultsRevisedAt: true },
+        });
+
+        const closure = await tx.tournamentPrizeClosure.findUnique({
+          where: { tournamentId },
+          select: { id: true },
+        });
+
+        if (closure) {
+          throw new BadRequestException(
+            'La Polla ya tiene un cierre definitivo.',
+          );
+        }
+
+        const publishedAt = tournament.resultsPublishedAt;
+
+        if (!publishedAt) {
+          throw new BadRequestException(
+            'Los resultados todavía no han sido publicados.',
+          );
+        }
+
+        const now = new Date();
+        // POLLAMIX_REVISED_CLAIMS_DEADLINE_PLAYER
+        const revisedAt = tournament.resultsRevisedAt;
+
+        const effectivePublication =
+          revisedAt && revisedAt.getTime() > publishedAt.getTime()
+            ? revisedAt
+            : publishedAt;
+
+        const start = effectivePublication.getTime();
+        const deadline = start + 48 * 60 * 60 * 1000;
+
+        if (
+          !Number.isFinite(start) ||
+          now.getTime() < start
+        ) {
+          throw new BadRequestException(
+            'La fecha de publicación no es válida.',
+          );
+        }
+
+        if (now.getTime() >= deadline) {
+          throw new BadRequestException(
+            'El período de reclamaciones ya terminó.',
+          );
+        }
+
+        const participant = await tx.tournamentParticipant.findUnique({
+          where: {
+            tournamentId_userId: {
+              tournamentId,
+              userId,
+            },
+          },
+          select: { id: true },
+        });
+
+        if (!participant) {
+          throw new BadRequestException(
+            'Debes estar inscrito en esta Polla.',
+          );
+        }
+
+        // Comprobación en la base de datos:
+        // no se confía en el indicador paid del navegador.
+        const approvedPayment = await tx.payment.findFirst({
+          where: {
+            tournamentId,
+            userId,
+            status: 'APPROVED',
+            currency: 'COP',
+            OR: [
+              { participantId: participant.id },
+              { participantId: null },
+            ],
+          },
+          select: { id: true },
+        });
+
+        if (!approvedPayment) {
+          throw new BadRequestException(
+            'Se requiere un pago aprobado para reclamar.',
+          );
+        }
+
+        const existingPending = await tx.tournamentClaim.findFirst({
+          where: {
+            tournamentId,
+            userId,
+            status: 'PENDING',
+          },
+          select: { id: true },
+        });
+
+        if (existingPending) {
+          throw new BadRequestException(
+            'Ya tienes una reclamación pendiente en esta Polla.',
+          );
+        }
+
+        const claim = await tx.tournamentClaim.create({
+          data: {
+            tournamentId,
+            userId,
+            reason,
+            status: 'PENDING',
+          },
+          select: {
+            id: true,
+            tournamentId: true,
+            reason: true,
+            status: true,
+            createdAt: true,
+          },
+        });
+
+        return {
+          ...claim,
+          claimsDeadlineAt: new Date(deadline),
+        };
+      },
+      {
+        isolationLevel:
+          Prisma.TransactionIsolationLevel.ReadCommitted,
+        timeout: 10000,
+      },
+    );
+  }
+
   async join(tournamentId: number, userId: number) {
     if (
       !Number.isSafeInteger(tournamentId) ||

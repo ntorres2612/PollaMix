@@ -18,6 +18,9 @@ describe('Bloqueo transaccional de resultados', () => {
     tournamentPrizeClosure: {
       findFirst: jest.fn(),
     },
+    tournament: {
+      findFirst: jest.fn(),
+    },
     $queryRaw: jest.fn(),
   };
 
@@ -49,6 +52,11 @@ describe('Bloqueo transaccional de resultados', () => {
         calls.push('closure-check');
         return null;
       });
+
+    tx.tournament.findFirst.mockImplementation(async () => {
+      calls.push('publication-check');
+      return null;
+    });
   });
 
   const client = () =>
@@ -64,6 +72,7 @@ describe('Bloqueo transaccional de resultados', () => {
       'relations',
       'match-check',
       'closure-check',
+      'publication-check',
     ]);
 
     expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
@@ -87,6 +96,31 @@ describe('Bloqueo transaccional de resultados', () => {
     await expect(
       lockMatchForPrizeSafeUpdate(client(), 100),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rechaza un partido con resultados publicados', async () => {
+    tx.tournament.findFirst.mockResolvedValue({
+      id: 5,
+    });
+
+    await expect(
+      lockMatchForPrizeSafeUpdate(client(), 100),
+    ).rejects.toThrow(
+      'No se permite modificar un partido asociado a resultados ya publicados.',
+    );
+
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
+
+    expect(tx.tournament.findFirst)
+      .toHaveBeenCalledWith({
+        where: {
+          resultsPublishedAt: { not: null },
+          tournamentMatches: {
+            some: { matchId: 100 },
+          },
+        },
+        select: { id: true },
+      });
   });
 
   it('rechaza un partido inexistente', async () => {

@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
@@ -18,6 +19,29 @@ export class TournamentParticipantsController {
     private readonly participantsService:
       TournamentParticipantsService,
   ) {}
+
+  // POLLAMIX_PLAYER_CLAIMS_ENDPOINT
+  @Post(':tournamentId/claims')
+  @UseGuards(JwtAuthGuard)
+  createClaim(
+    @Param('tournamentId') tournamentId: string,
+    @CurrentUser() user: any,
+    @Body() body: unknown,
+  ) {
+    const reason =
+      body !== null &&
+      typeof body === 'object' &&
+      !Array.isArray(body) &&
+      Object.prototype.hasOwnProperty.call(body, 'reason')
+        ? (body as { reason: unknown }).reason
+        : undefined;
+
+    return this.participantsService.createClaim(
+      Number(tournamentId),
+      Number(user.id),
+      reason,
+    );
+  }
 
   @Post(':tournamentId/join')
   @UseGuards(JwtAuthGuard)

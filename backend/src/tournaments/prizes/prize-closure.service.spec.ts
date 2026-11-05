@@ -18,6 +18,9 @@ describe('PrizeClosureService - cierre definitivo', () => {
     payment: {
       findMany: jest.fn(),
     },
+    tournamentClaim: {
+      count: jest.fn(),
+    },
   };
 
   const prisma = {
@@ -72,6 +75,8 @@ describe('PrizeClosureService - cierre definitivo', () => {
       inscription: 16000,
       registrationEndsAt: new Date('2025-01-01'),
       endsAt: new Date('2025-02-01'),
+      resultsPublishedAt: new Date('2025-02-02'),
+      resultsRevisedAt: new Date('2025-02-03'),
       participants: createParticipants(),
     });
 
@@ -98,6 +103,8 @@ describe('PrizeClosureService - cierre definitivo', () => {
     tx.payment.findMany.mockResolvedValue(
       createPayments(),
     );
+
+    tx.tournamentClaim.count.mockResolvedValue(0);
 
     tx.tournamentPrizeClosure.create
       .mockImplementation(async ({ data }: { data: unknown }) => ({
@@ -148,6 +155,17 @@ describe('PrizeClosureService - cierre definitivo', () => {
         }),
       ]),
     );
+
+    expect(tx.tournamentClaim.count)
+      .toHaveBeenCalledWith({
+        where: {
+          tournamentId: 99,
+          OR: [
+            { status: 'PENDING' },
+            { status: 'ACCEPTED', resolvedAt: null },
+          ],
+        },
+      });
 
     expect(tx.tournamentPrizeClosure.create)
       .toHaveBeenCalledTimes(1);

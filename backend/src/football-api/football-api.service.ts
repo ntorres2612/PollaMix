@@ -463,22 +463,47 @@ export class FootballApiService {
       const awayTeamId =
         fixture.teams?.away?.id;
 
-      const homeScore =
-        fixture.goals?.home ??
-        null;
+      // POLLAMIX_API_FOOTBALL_REGULATION_GUARD
+      const status = fixture.fixture?.status?.short;
 
-      const awayScore =
-        fixture.goals?.away ??
-        null;
+      const finished = finishedStatuses.includes(status);
 
-      const status =
-        fixture.fixture
-          ?.status?.short;
+      const requiresFulltimeScore =
+        status === 'AET' || status === 'PEN';
 
-      const finished =
-        finishedStatuses.includes(
-          status,
+      const rawHomeScore = requiresFulltimeScore
+        ? fixture.score?.fulltime?.home
+        : fixture.goals?.home;
+
+      const rawAwayScore = requiresFulltimeScore
+        ? fixture.score?.fulltime?.away
+        : fixture.goals?.away;
+
+      const isValidScore = (value: unknown): value is number =>
+        typeof value === 'number' &&
+        Number.isSafeInteger(value) &&
+        value >= 0;
+
+      const homeScore = isValidScore(rawHomeScore)
+        ? rawHomeScore
+        : null;
+
+      const awayScore = isValidScore(rawAwayScore)
+        ? rawAwayScore
+        : null;
+
+      if (
+        finished &&
+        (homeScore === null || awayScore === null)
+      ) {
+        skipped++;
+        console.warn(
+          `[PollaMix] Partido ${fixtureId}: marcador ` +
+          `reglamentario inválido para estado ${status}. ` +
+          'Se omite la actualización.'
         );
+        continue;
+      }
 
       const round =
         String(
@@ -843,22 +868,46 @@ export class FootballApiService {
         continue;
       }
 
-      const homeScore =
-        fixture.goals?.home ??
-        null;
+      // POLLAMIX_API_FOOTBALL_REGULATION_GUARD
+      const status = fixture.fixture?.status?.short;
 
-      const awayScore =
-        fixture.goals?.away ??
-        null;
+      const finished = finishedStatuses.includes(status);
 
-      const status =
-        fixture.fixture
-          ?.status?.short;
+      const requiresFulltimeScore =
+        status === 'AET' || status === 'PEN';
 
-      const finished =
-        finishedStatuses.includes(
-          status,
+      const rawHomeScore = requiresFulltimeScore
+        ? fixture.score?.fulltime?.home
+        : fixture.goals?.home;
+
+      const rawAwayScore = requiresFulltimeScore
+        ? fixture.score?.fulltime?.away
+        : fixture.goals?.away;
+
+      const isValidScore = (value: unknown): value is number =>
+        typeof value === 'number' &&
+        Number.isSafeInteger(value) &&
+        value >= 0;
+
+      const homeScore = isValidScore(rawHomeScore)
+        ? rawHomeScore
+        : null;
+
+      const awayScore = isValidScore(rawAwayScore)
+        ? rawAwayScore
+        : null;
+
+      if (
+        finished &&
+        (homeScore === null || awayScore === null)
+      ) {
+        console.warn(
+          `[PollaMix] Partido ${fixtureId}: marcador ` +
+          `reglamentario inválido para estado ${status}. ` +
+          'Se omite la actualización.'
         );
+        continue;
+      }
 
       const fixtureDate =
         fixture.fixture?.date

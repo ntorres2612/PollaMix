@@ -872,6 +872,20 @@ export class TournamentsService {
           'No se pueden modificar los partidos: los premios de esta Polla ya están cerrados.',
         );
       }
+
+      // POLLAMIX_BLOCK_PUBLISHED_SELECTION
+      // El torneo está bloqueado FOR UPDATE en esta transacción.
+      const publication = await tx.tournament.findUnique({
+        where: { id: tournamentId },
+        select: { resultsPublishedAt: true },
+      });
+
+      if (publication?.resultsPublishedAt !== null &&
+          publication?.resultsPublishedAt !== undefined) {
+        throw new BadRequestException(
+          'No se pueden cambiar los partidos después de publicar resultados.',
+        );
+      }
       const [existingPredictions, confirmedParticipants] = await Promise.all([
         tx.prediction.count({ where: { tournamentId } }),
         tx.tournamentParticipant.count({

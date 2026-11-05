@@ -11,6 +11,9 @@ describe('Seguridad del cierre - recálculo de puntuaciones', () => {
     tournamentPrizeClosure: {
       findFirst: jest.fn(),
     },
+    tournament: {
+      findFirst: jest.fn(),
+    },
     match: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -41,6 +44,7 @@ describe('Seguridad del cierre - recálculo de puntuaciones', () => {
     ]);
 
     tx.tournamentPrizeClosure.findFirst.mockResolvedValue(null);
+    tx.tournament.findFirst.mockResolvedValue(null);
 
     tx.match.findUnique.mockResolvedValue({
       id: 100,
@@ -81,6 +85,22 @@ describe('Seguridad del cierre - recálculo de puntuaciones', () => {
     expect(result.success).toBe(true);
     expect(tx.prediction.update).toHaveBeenCalled();
     expect(tx.match.update).toHaveBeenCalled();
+  });
+
+  it('impide recalcular resultados oficialmente publicados', async () => {
+    tx.tournament.findFirst.mockResolvedValue({
+      id: 99,
+    });
+
+    await expect(
+      service.scoreMatch(100),
+    ).rejects.toThrow(
+      'No se permite modificar un partido asociado a resultados ya publicados.',
+    );
+
+    expect(tx.tournament.findFirst).toHaveBeenCalled();
+    expect(tx.prediction.update).not.toHaveBeenCalled();
+    expect(tx.match.update).not.toHaveBeenCalled();
   });
 
   it('impide recalcular un partido de una Polla cerrada', async () => {

@@ -89,6 +89,19 @@ export class PredictionsService {
           );
         }
 
+        // POLLAMIX_PUBLISHED_PREDICTIONS_GUARD
+        // Consultar bajo el bloqueo de Tournament.
+        const publicationState = await tx.tournament.findUnique({
+          where: { id: tournamentId },
+          select: { resultsPublishedAt: true },
+        });
+
+        if (publicationState?.resultsPublishedAt != null) {
+          throw new ForbiddenException(
+            'Los resultados de esta Polla ya fueron publicados. Los pronósticos no pueden modificarse.',
+          );
+        }
+
         // Serializa los envíos del mismo participante.
         const rows = await tx.$queryRaw<
           Array<{ id: number }>
@@ -270,6 +283,19 @@ export class PredictionsService {
         );
       }
 
+
+      // POLLAMIX_PUBLISHED_PREDICTIONS_GUARD
+      // Consultar bajo el bloqueo de Tournament.
+      const publicationState = await tx.tournament.findUnique({
+        where: { id: dto.tournamentId },
+        select: { resultsPublishedAt: true },
+      });
+
+      if (publicationState?.resultsPublishedAt != null) {
+        throw new ForbiddenException(
+          'Los resultados de esta Polla ya fueron publicados. Los pronósticos no pueden modificarse.',
+        );
+      }
 
     // 1. Verificar partido
     const match = await tx.match.findUnique({
@@ -540,6 +566,19 @@ export class PredictionsService {
         );
       }
 
+      // POLLAMIX_PUBLISHED_PREDICTIONS_GUARD
+      // Consultar bajo el bloqueo de Tournament.
+      const publicationState = await tx.tournament.findUnique({
+        where: { id: prediction.tournamentId },
+        select: { resultsPublishedAt: true },
+      });
+
+      if (publicationState?.resultsPublishedAt != null) {
+        throw new ForbiddenException(
+          'Los resultados de esta Polla ya fueron publicados. Los pronósticos no pueden modificarse.',
+        );
+      }
+
       if (prediction.tournament.predictionsCloseAt !== null) {
         throw new ForbiddenException(
           'Los pronósticos de esta Polla son definitivos y no pueden modificarse.',
@@ -605,6 +644,19 @@ export class PredictionsService {
       if (closure) {
         throw new ForbiddenException(
           'Los premios de esta Polla están cerrados. Los pronósticos son definitivos.',
+        );
+      }
+
+      // POLLAMIX_PUBLISHED_PREDICTIONS_GUARD
+      // Consultar bajo el bloqueo de Tournament.
+      const publicationState = await tx.tournament.findUnique({
+        where: { id: prediction.tournamentId },
+        select: { resultsPublishedAt: true },
+      });
+
+      if (publicationState?.resultsPublishedAt != null) {
+        throw new ForbiddenException(
+          'Los resultados de esta Polla ya fueron publicados. Los pronósticos no pueden modificarse.',
         );
       }
 

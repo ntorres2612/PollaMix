@@ -54,4 +54,22 @@ export async function assertMatchNotPrizeClosed(
       'Este partido pertenece a una Polla con premios cerrados. No se permite modificar sus resultados.',
     );
   }
+
+  // POLLAMIX_BLOCK_PUBLISHED_MATCH
+  // El llamador ya bloqueó los torneos asociados.
+  const published = await tx.tournament.findFirst({
+    where: {
+      resultsPublishedAt: { not: null },
+      tournamentMatches: {
+        some: { matchId },
+      },
+    },
+    select: { id: true },
+  });
+
+  if (published) {
+    throw new BadRequestException(
+      'No se permite modificar un partido asociado a resultados ya publicados.',
+    );
+  }
 }

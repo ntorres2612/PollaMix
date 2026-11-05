@@ -19,27 +19,27 @@ const sections = [
   },
   {
     title: "5. Resultados válidos",
-    text: "Como criterio propuesto, se considerará el marcador tras los 90 minutos reglamentarios y el tiempo de reposición. No se incluirán prórrogas ni tandas de penales, salvo que las reglas específicas del torneo indiquen expresamente lo contrario.",
+    text: "Para calcular los pronósticos se utilizará el marcador oficial correspondiente a los 90 minutos reglamentarios, incluido el tiempo de reposición. No se tendrán en cuenta los goles marcados durante prórrogas ni los resultados de tandas de penales.",
   },
   {
     title: "6. Puntuación y clasificación",
-    text: "La clasificación será calculada con base en los resultados validados y las reglas de puntuación publicadas para cada torneo. Los criterios exactos de asignación de puntos y resolución de empates deberán estar disponibles antes de iniciar la competencia.",
+    text: "Por cada partido, el jugador obtiene 1 punto cuando acierta victoria del equipo local, empate o victoria del equipo visitante. Un pronóstico incorrecto otorga 0 puntos. Acertar el marcador exacto no concede puntos adicionales. La clasificación se establece sumando los puntos de los partidos seleccionados.",
   },
   {
     title: "7. Encuentros suspendidos o aplazados",
-    text: "Los partidos que sufran cambios de programación, suspensión o anulación serán tratados conforme a criterios publicados previamente. PollaMix informará su efecto sobre los pronósticos y la clasificación.",
+    text: "Si uno de los partidos seleccionados es aplazado, suspendido o interrumpido, PollaMix esperará su resultado oficial correspondiente a los 90 minutos reglamentarios y el tiempo de reposición. Mientras falte un resultado oficial válido o su puntuación, no podrá realizarse el cierre definitivo de premios. Los cambios de programación serán comunicados por los canales oficiales.",
   },
   {
     title: "8. Pagos y premios",
-    text: "Cuando exista un valor de inscripción, este se mostrará antes de participar. Los premios dependerán de los pagos confirmados, la distribución anunciada y la clasificación definitiva. Los montos preliminares no constituyen premios confirmados.",
+    text: "La bolsa de premios corresponde al 67,81 % de la recaudación de inscripciones aprobadas en COP. El 32,19 % restante corresponde a PollaMix. De la bolsa de premios, se asigna el 70 % al primer puesto, el 20 % al segundo y el 10 % al tercero. Los participantes con la misma puntuación comparten posición y dividen el importe asignado a ella. El siguiente puntaje distinto ocupa la siguiente posición, aunque haya varios jugadores empatados en la anterior. Los importes definitivos solo se establecen tras el cierre oficial.",
   },
   {
     title: "9. Reclamaciones",
-    text: "Los participantes podrán comunicar errores de registro, resultados o clasificación por los canales oficiales. Los plazos y el procedimiento de reclamación deberán publicarse antes de habilitar torneos con pagos reales.",
+    text: "Los participantes dispondrán de 48 horas, contadas desde la publicación y registro en PollaMix del último resultado oficial válido de los partidos seleccionados, para reclamar errores de resultados, puntuación o clasificación. Durante este plazo, la clasificación y los premios serán provisionales. Una vez terminado el plazo y resueltas las reclamaciones pendientes, podrá realizarse el cierre definitivo. El canal formal y el procedimiento de respuesta se informarán antes de recibir pagos reales.",
   },
   {
     title: "10. Finalización y juego limpio",
-    text: "La competencia terminará conforme al calendario publicado, una vez validados los resultados necesarios. No se permite manipular cuentas, pagos, pronósticos o clasificaciones para obtener ventajas indebidas.",
+    text: "La Polla se cerrará definitivamente cuando estén registrados y puntuados todos los partidos seleccionados, haya finalizado el plazo de reclamación de 48 horas, estén resueltas las reclamaciones pendientes y se hayan conciliado los pagos. No se permite manipular cuentas, pronósticos, resultados o pagos para obtener ventajas indebidas.",
   },
 ];
 

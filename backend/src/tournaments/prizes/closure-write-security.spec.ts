@@ -22,6 +22,9 @@ describe('Seguridad de escritura tras el cierre definitivo', () => {
 
   const matchTx = {
     $queryRaw: jest.fn(),
+    tournament: {
+      findFirst: jest.fn(),
+    },
     tournamentMatch: {
       findMany: jest.fn(),
     },
@@ -80,6 +83,8 @@ describe('Seguridad de escritura tras el cierre definitivo', () => {
     matchTx.match.findUnique.mockResolvedValue({ id: 100 });
     matchTx.tournamentPrizeClosure.findFirst
       .mockResolvedValue(null);
+    matchTx.tournament.findFirst
+      .mockResolvedValue(null);
     matchTx.match.delete.mockResolvedValue({ id: 100 });
 
     matches = Object.create(MatchesService.prototype);
@@ -122,6 +127,31 @@ describe('Seguridad de escritura tras el cierre definitivo', () => {
     await expect(
       matches.remove(100),
     ).rejects.toThrow(BadRequestException);
+
+    expect(matchTx.match.delete).not.toHaveBeenCalled();
+  });
+
+  it('impide eliminar un partido con resultados publicados', async () => {
+    matchTx.tournament.findFirst.mockResolvedValue({
+      id: 99,
+    });
+
+    await expect(
+      matches.remove(100),
+    ).rejects.toThrow(
+      'No se permite modificar un partido asociado a resultados ya publicados.',
+    );
+
+    expect(matchTx.tournament.findFirst)
+      .toHaveBeenCalledWith({
+        where: {
+          resultsPublishedAt: { not: null },
+          tournamentMatches: {
+            some: { matchId: 100 },
+          },
+        },
+        select: { id: true },
+      });
 
     expect(matchTx.match.delete).not.toHaveBeenCalled();
   });

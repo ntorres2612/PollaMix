@@ -7,6 +7,9 @@ describe('Seguridad del cierre - selección de partidos', () => {
     tournamentPrizeClosure: {
       findUnique: jest.fn(),
     },
+    tournament: {
+      findUnique: jest.fn(),
+    },
     prediction: {
       count: jest.fn(),
     },
@@ -56,6 +59,9 @@ describe('Seguridad del cierre - selección de partidos', () => {
 
     tx.$queryRaw.mockResolvedValue([{ id: 99 }]);
     tx.tournamentPrizeClosure.findUnique.mockResolvedValue(null);
+    tx.tournament.findUnique.mockResolvedValue({
+      resultsPublishedAt: null,
+    });
     tx.prediction.count.mockResolvedValue(0);
     tx.tournamentParticipant.count.mockResolvedValue(0);
     tx.tournamentMatch.deleteMany.mockResolvedValue({ count: 0 });
@@ -98,6 +104,30 @@ describe('Seguridad del cierre - selección de partidos', () => {
 
     expect(lock).toBeLessThan(closure);
     expect(closure).toBeLessThan(deletion);
+  });
+
+  it('impide cambiar partidos después de publicar resultados', async () => {
+    tx.tournament.findUnique.mockResolvedValue({
+      resultsPublishedAt: new Date('2026-11-04T23:06:12.262Z'),
+    });
+
+    await expect(
+      service.selectMatches(99, matchIds),
+    ).rejects.toThrow(
+      'No se pueden cambiar los partidos después de publicar resultados.',
+    );
+
+    expect(tx.tournament.findUnique)
+      .toHaveBeenCalledWith({
+        where: { id: 99 },
+        select: { resultsPublishedAt: true },
+      });
+
+    expect(tx.prediction.count).not.toHaveBeenCalled();
+    expect(tx.tournamentParticipant.count).not.toHaveBeenCalled();
+
+    expect(tx.tournamentMatch.deleteMany).not.toHaveBeenCalled();
+    expect(tx.tournamentMatch.createMany).not.toHaveBeenCalled();
   });
 
   it('impide cambios cuando existen pronósticos', async () => {

@@ -429,6 +429,41 @@ export class EspnFootballService {
               )
             : null;
 
+        // POLLAMIX_ESPN_REGULATION_GUARD
+        // Solo aceptar automáticamente finales FT verificados.
+        // Otros finales requieren revisión del marcador reglamentario.
+        const normalFullTime =
+          statusType?.completed === true &&
+          statusType?.name === 'STATUS_FULL_TIME' &&
+          statusType?.detail === 'FT';
+
+        if (completed && !normalFullTime) {
+          skipped++;
+          this.logger.warn(
+            `ESPN: partido ${event.id} terminado sin estado FT ` +
+            `verificado. Se omite su actualización automática.`,
+          );
+          continue;
+        }
+
+        if (
+          completed &&
+          (
+            !Number.isSafeInteger(homeScore) ||
+            !Number.isSafeInteger(awayScore) ||
+            homeScore === null ||
+            awayScore === null ||
+            homeScore < 0 ||
+            awayScore < 0
+          )
+        ) {
+          skipped++;
+          this.logger.warn(
+            `ESPN: partido ${event.id} sin marcador final válido.`,
+          );
+          continue;
+        }
+
         const espnApiId =
           Number(event.id);
 
