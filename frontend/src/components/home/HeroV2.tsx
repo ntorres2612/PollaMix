@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { getCurrentUser, getToken } from "@/lib/auth";
 import HomeTournamentStats from "./HomeTournamentStats";
 
 const steps = [
@@ -23,6 +27,49 @@ const steps = [
 ];
 
 export default function HeroV2() {
+  const [destination, setDestination] = useState("/login");
+  const [buttonLabel, setButtonLabel] =
+    useState("Ingresar y participar");
+
+  useEffect(() => {
+    const user = getCurrentUser();
+    const token = getToken();
+
+    if (!user || !token) return;
+
+    try {
+      const payload = token.split(".")[1];
+
+      if (!payload) return;
+
+      const decoded = JSON.parse(
+        atob(
+          payload
+            .replace(/-/g, "+")
+            .replace(/_/g, "/"),
+        ),
+      );
+
+      if (
+        typeof decoded.exp !== "number" ||
+        decoded.exp * 1000 <= Date.now()
+      ) {
+        return;
+      }
+
+      if (user.role === "ADMIN") {
+        setDestination("/admin/tournaments");
+        setButtonLabel("Ir a administración");
+      } else if (user.role === "PLAYER") {
+        setDestination("/pronosticos");
+        setButtonLabel("Ir a mi Polla");
+      }
+    } catch {
+      // Si el token no se puede interpretar,
+      // conservamos el acceso al login.
+    }
+  }, []);
+
   return (
     <>
       <section className="relative isolate flex min-h-[690px] items-center overflow-hidden bg-[#030b19] lg:min-h-[760px]">
@@ -65,10 +112,10 @@ export default function HeroV2() {
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/login"
+                href={destination}
                 className="inline-flex min-h-14 items-center justify-center rounded-xl bg-red-600 px-8 text-base font-bold text-white shadow-xl shadow-red-950/30 transition hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-400"
               >
-                Ingresar y participar
+                {buttonLabel}
                 <span className="ml-3" aria-hidden="true">→</span>
               </Link>
 
