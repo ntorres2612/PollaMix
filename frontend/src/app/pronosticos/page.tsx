@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import TeamLogo from "@/components/match/TeamLogo";
 
 import {
   getCurrentPlayerTournament,
@@ -78,43 +79,6 @@ function getMatchStarted(
   );
 }
 
-
-function TeamLogo({
-  src,
-  name,
-  size = "h-10 w-10",
-}: {
-  src?: string | null;
-  name: string;
-  size?: string;
-}) {
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    setFailed(false);
-  }, [src]);
-
-  if (!src || failed) {
-    return (
-      <span
-        role="img"
-        aria-label={`Equipo: ${name}`}
-        className={`${size} flex shrink-0 items-center justify-center rounded-xl border border-white/10 bg-slate-800 text-xl`}
-      >
-        ⚽
-      </span>
-    );
-  }
-
-  return (
-    <img
-      src={src}
-      alt={`Escudo de ${name}`}
-      className={`${size} shrink-0 object-contain`}
-      onError={() => setFailed(true)}
-    />
-  );
-}
 
 export default function PredictionsPage() {
 

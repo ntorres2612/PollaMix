@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import PlayerClaimForm from "@/components/claims/PlayerClaimForm";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import TeamLogo from "@/components/match/TeamLogo";
 
 import { getCurrentUser, logout } from "@/lib/auth";
 
@@ -594,17 +595,11 @@ export default function PredictionResultsPage() {
 
                         <div className="flex items-center gap-3 md:justify-end">
 
-                          {match.homeTeam.logo && (
-                            <img
-                              src={
-                                match.homeTeam.logo
-                              }
-                              alt={
-                                match.homeTeam.name
-                              }
-                              className="h-11 w-11 object-contain"
-                            />
-                          )}
+                          <TeamLogo
+  src={match.homeTeam.logo}
+  name={match.homeTeam.name}
+  size="h-11 w-11"
+/>
 
                           <div className="md:text-right">
                             <p className="text-xs font-bold uppercase text-slate-500">
@@ -652,17 +647,11 @@ export default function PredictionResultsPage() {
                             </p>
                           </div>
 
-                          {match.awayTeam.logo && (
-                            <img
-                              src={
-                                match.awayTeam.logo
-                              }
-                              alt={
-                                match.awayTeam.name
-                              }
-                              className="h-11 w-11 object-contain"
-                            />
-                          )}
+                          <TeamLogo
+  src={match.awayTeam.logo}
+  name={match.awayTeam.name}
+  size="h-11 w-11"
+/>
 
                         </div>
 
