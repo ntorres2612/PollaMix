@@ -20,14 +20,14 @@ const options = [
     title: "Tengo una duda",
     description: "Inscripciones, pronósticos y funcionamiento.",
     message:
-      "Hola, equipo de PollaMix. Tengo una consulta sobre " +
+      "Hola, equipo de GolPro. Tengo una consulta sobre " +
       "el funcionamiento de la plataforma. ¿Me pueden ayudar?",
   },
   {
     title: "Enviar comprobante de pago",
     description: "Adjunta tu comprobante desde WhatsApp.",
     message:
-      "Hola, equipo de PollaMix. Quiero enviar mi " +
+      "Hola, equipo de GolPro. Quiero enviar mi " +
       "comprobante de pago para que puedan verificar " +
       "mi inscripción. Adjunto el soporte a continuación.",
   },
@@ -47,7 +47,7 @@ export default function WhatsAppFloatingButton() {
         >
           <div className="bg-[#075e39] p-4">
             <p className="font-bold text-white">
-              Soporte PollaMix
+              Soporte GolPro
             </p>
             <p className="mt-1 text-sm text-white/85">
               ¿En qué podemos ayudarte?

@@ -222,7 +222,7 @@ export default function AdminTournamentClaimsPage() {
         </Link>
 
         <p className="mt-8 text-sm font-bold uppercase tracking-widest text-red-400">
-          Administración · PollaMix
+          Administración · GolPro
         </p>
 
         <h1 className="mt-3 text-3xl font-black">

@@ -125,7 +125,7 @@ export default function JornadasPage() {
       <div className="mx-auto max-w-7xl px-4 pb-16 pt-28 sm:px-6">
         <section className="mb-10">
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-400">
-            PollaMix
+            GolPro
           </p>
 
           <h1 className="mt-2 text-4xl font-black sm:text-5xl">

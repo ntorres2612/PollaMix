@@ -513,7 +513,7 @@ export default function AdminTournamentDetailPage() {
                         money: true,
                       },
                       {
-                        label: 'Utilidad de PollaMix',
+                        label: 'Utilidad de GolPro',
                         amount: prizes.profitCOP,
                         money: true,
                       },

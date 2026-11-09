@@ -94,7 +94,7 @@ export default function HeroV2() {
           <div className="max-w-[760px]">
             <span className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[.16em] text-red-300 backdrop-blur-sm sm:text-sm">
               <span className="h-2 w-2 rounded-full bg-red-500" />
-              La emoción de la Liga MX
+              La emoción del fútbol
             </span>
 
             <h1 className="mt-8 text-5xl font-black leading-[1.06] tracking-tight text-white sm:text-6xl lg:text-[76px]">
@@ -172,7 +172,7 @@ export default function HeroV2() {
             </h2>
 
             <p className="mt-4 text-base leading-7 text-slate-400">
-              Tres pasos para empezar a disfrutar PollaMix.
+              Tres pasos para empezar a disfrutar GolPro.
             </p>
           </div>
 

@@ -52,7 +52,7 @@ export default function LoginPage() {
           <div className="text-center mb-8">
 
             <h1 className="text-3xl font-black">
-              PollaMix
+              GolPro
             </h1>
 
             <p className="text-slate-400 mt-2">

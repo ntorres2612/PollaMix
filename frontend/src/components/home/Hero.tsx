@@ -37,7 +37,7 @@ export default function Hero() {
                             Participa en
                             <br />
                             <span className="text-red-600">
-                                POLLA MIX
+                                GOLPRO
                             </span>
                         </h1>
 

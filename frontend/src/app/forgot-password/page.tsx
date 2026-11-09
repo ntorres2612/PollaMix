@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-5 py-12 text-white">
       <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8">
         <p className="text-sm font-bold uppercase tracking-widest text-red-400">
-          PollaMix
+          GolPro
         </p>
         <h1 className="mt-3 text-3xl font-black">
           Recuperar contraseña

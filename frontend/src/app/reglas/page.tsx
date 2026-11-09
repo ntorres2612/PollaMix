@@ -3,11 +3,11 @@ import Link from "next/link";
 const sections = [
   {
     title: "1. Registro e inscripción",
-    text: "Para participar en PollaMix debes crear una cuenta y registrarte en el torneo correspondiente. El registro de una cuenta no equivale a una inscripción automática en la competencia.",
+    text: "Para participar en GolPro debes crear una cuenta y registrarte en el torneo correspondiente. El registro de una cuenta no equivale a una inscripción automática en la competencia.",
   },
   {
     title: "2. Participación sin límite de cupos",
-    text: "Los torneos públicos de PollaMix podrán admitir un número ilimitado de participantes. No se exige alcanzar una cantidad mínima de inscritos para que la competencia comience.",
+    text: "Los torneos públicos de GolPro podrán admitir un número ilimitado de participantes. No se exige alcanzar una cantidad mínima de inscritos para que la competencia comience.",
   },
   {
     title: "3. Apertura y cierre de inscripciones",
@@ -27,15 +27,15 @@ const sections = [
   },
   {
     title: "7. Encuentros suspendidos o aplazados",
-    text: "Si uno de los partidos seleccionados es aplazado, suspendido o interrumpido, PollaMix esperará su resultado oficial correspondiente a los 90 minutos reglamentarios y el tiempo de reposición. Mientras falte un resultado oficial válido o su puntuación, no podrá realizarse el cierre definitivo de premios. Los cambios de programación serán comunicados por los canales oficiales.",
+    text: "Si uno de los partidos seleccionados es aplazado, suspendido o interrumpido, GolPro esperará su resultado oficial correspondiente a los 90 minutos reglamentarios y el tiempo de reposición. Mientras falte un resultado oficial válido o su puntuación, no podrá realizarse el cierre definitivo de premios. Los cambios de programación serán comunicados por los canales oficiales.",
   },
   {
     title: "8. Pagos y premios",
-    text: "La bolsa de premios corresponde al 67,81 % de la recaudación de inscripciones aprobadas en COP. El 32,19 % restante corresponde a PollaMix. De la bolsa de premios, se asigna el 70 % al primer puesto, el 20 % al segundo y el 10 % al tercero. Los participantes con la misma puntuación comparten posición y dividen el importe asignado a ella. El siguiente puntaje distinto ocupa la siguiente posición, aunque haya varios jugadores empatados en la anterior. Los importes definitivos solo se establecen tras el cierre oficial.",
+    text: "La bolsa de premios corresponde al 67,81 % de la recaudación de inscripciones aprobadas en COP. El 32,19 % restante corresponde a GolPro. De la bolsa de premios, se asigna el 70 % al primer puesto, el 20 % al segundo y el 10 % al tercero. Los participantes con la misma puntuación comparten posición y dividen el importe asignado a ella. El siguiente puntaje distinto ocupa la siguiente posición, aunque haya varios jugadores empatados en la anterior. Los importes definitivos solo se establecen tras el cierre oficial.",
   },
   {
     title: "9. Reclamaciones",
-    text: "Los participantes dispondrán de 48 horas, contadas desde la publicación y registro en PollaMix del último resultado oficial válido de los partidos seleccionados, para reclamar errores de resultados, puntuación o clasificación. Durante este plazo, la clasificación y los premios serán provisionales. Una vez terminado el plazo y resueltas las reclamaciones pendientes, podrá realizarse el cierre definitivo. El canal formal y el procedimiento de respuesta se informarán antes de recibir pagos reales.",
+    text: "Los participantes dispondrán de 48 horas, contadas desde la publicación y registro en GolPro del último resultado oficial válido de los partidos seleccionados, para reclamar errores de resultados, puntuación o clasificación. Durante este plazo, la clasificación y los premios serán provisionales. Una vez terminado el plazo y resueltas las reclamaciones pendientes, podrá realizarse el cierre definitivo. El canal formal y el procedimiento de respuesta se informarán antes de recibir pagos reales.",
   },
   {
     title: "10. Finalización y juego limpio",
@@ -55,7 +55,7 @@ export default function ReglasPage() {
         </Link>
 
         <p className="mt-12 text-sm font-bold uppercase tracking-widest text-red-400">
-          POLLAMIX · LIGA MX
+          GOLPRO · REGLAMENTO
         </p>
 
         <h1 className="mt-4 text-4xl font-black sm:text-5xl">
@@ -64,7 +64,7 @@ export default function ReglasPage() {
 
         <p className="mt-5 text-lg leading-8 text-slate-300">
           Conoce las condiciones generales para participar
-          en las competencias de PollaMix.
+          en las competencias de GolPro.
         </p>
 
         <div className="mt-10 space-y-4">

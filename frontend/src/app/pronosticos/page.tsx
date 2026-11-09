@@ -548,7 +548,7 @@ export default function PredictionsPage() {
           <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-10 text-center shadow-2xl">
 
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-400">
-              PollaMix
+              GolPro
             </p>
 
             <h1 className="mt-3 text-3xl font-black">

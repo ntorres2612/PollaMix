@@ -17,9 +17,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PollaMix | Liga MX",
+  title: "GolPro",
   description:
-    "PollaMix - Plataforma de pronósticos de Liga MX",
+    "GolPro - Pronósticos y resultados de fútbol",
 };
 
 export default function RootLayout({

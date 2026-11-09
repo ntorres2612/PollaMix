@@ -104,7 +104,7 @@ export default function PremiosPage() {
 
       <div className="mx-auto max-w-6xl px-4 pb-16 pt-28 sm:px-6">
         <p className="text-sm font-bold uppercase tracking-widest text-red-400">
-          PollaMix
+          GolPro
         </p>
 
         <h1 className="mt-2 text-4xl font-black">Premios</h1>

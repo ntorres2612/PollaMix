@@ -6,7 +6,7 @@ export default function Footer() {
 
         <p className="text-slate-400">
 
-          © 2026 PollaMix
+          © 2026 GolPro
 
         </p>
 

@@ -118,8 +118,8 @@ export default function RegisterPage() {
         </h1>
 
         <p className="mt-2 text-slate-400">
-          Únete a PollaMix y prepárate para participar
-          en las competencias de la Liga MX.
+          Únete a GolPro y prepárate para participar
+          en las competencias de fútbol.
         </p>
 
         {error && (

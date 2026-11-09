@@ -8,30 +8,22 @@ export default function Header() {
     <header className="fixed left-0 top-0 z-50 w-full border-b border-slate-800 bg-slate-950/90 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="flex h-20 items-center justify-between">
-          {/* Logo + identidad */}
+          {/* Identidad GolPro: símbolo vectorial y nombre */}
           <Link
             href="/"
-            className="flex items-center gap-3 transition-opacity hover:opacity-90"
+            aria-label="GolPro - Inicio"
+            className="flex shrink-0 items-center transition-opacity hover:opacity-90"
           >
-            <div className="relative h-14 w-14 shrink-0 sm:h-16 sm:w-16">
+            <div className="flex h-16 shrink-0 items-center">
               <Image
-                src="/logos/polla-mix-logo.png"
-                alt="PollaMix"
-                fill
+                src="/logos/golpro-logo-claro-v2.png"
+                alt="GolPro - Pronósticos y Resultados"
+                width={1659}
+                height={948}
                 priority
-                sizes="64px"
-                className="object-contain"
+                sizes="(max-width: 640px) 120px, (max-width: 768px) 150px, 175px"
+                className="block h-[56px] w-auto object-contain sm:h-[64px]"
               />
-            </div>
-
-            <div>
-              <h1 className="text-xl font-black text-white sm:text-2xl">
-                PollaMix
-              </h1>
-
-              <p className="text-xs text-slate-400 sm:text-sm">
-                Liga MX
-              </p>
             </div>
           </Link>
 
