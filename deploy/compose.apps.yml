@@ -1,0 +1,91 @@
+services:
+
+  backend-prd:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_URL: ${PRD_DATABASE_URL:?Configure PRD_DATABASE_URL}
+      JWT_SECRET: ${PRD_JWT_SECRET:?Configure PRD_JWT_SECRET}
+      FRONTEND_URL: ${PRD_FRONTEND_URL:?Configure PRD_FRONTEND_URL}
+      POLLAMIX_DISABLE_SYNC: "1"
+      SMTP_HOST: ${SMTP_HOST:?Configure SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:?Configure SMTP_PORT}
+      SMTP_USER: ${SMTP_USER:?Configure SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?Configure SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM:?Configure SMTP_FROM}
+    depends_on:
+      postgres-prd:
+        condition: service_healthy
+    expose:
+      - "3001"
+    networks:
+      - prd_private
+      - prd_app
+
+  frontend-prd:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: ${PRD_API_URL:?Configure PRD_API_URL}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - backend-prd
+    expose:
+      - "3000"
+    networks:
+      - prd_app
+
+  backend-qa:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_URL: ${QA_DATABASE_URL:?Configure QA_DATABASE_URL}
+      JWT_SECRET: ${QA_JWT_SECRET:?Configure QA_JWT_SECRET}
+      FRONTEND_URL: ${QA_FRONTEND_URL:?Configure QA_FRONTEND_URL}
+      POLLAMIX_DISABLE_SYNC: "1"
+      SMTP_HOST: ${SMTP_HOST:?Configure SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:?Configure SMTP_PORT}
+      SMTP_USER: ${SMTP_USER:?Configure SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?Configure SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM:?Configure SMTP_FROM}
+    depends_on:
+      postgres-qa:
+        condition: service_healthy
+    expose:
+      - "3001"
+    networks:
+      - qa_private
+      - qa_app
+
+  frontend-qa:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: ${QA_API_URL:?Configure QA_API_URL}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - backend-qa
+    expose:
+      - "3000"
+    networks:
+      - qa_app
+
+networks:
+  prd_app:
+    driver: bridge
+  qa_app:
+    driver: bridge

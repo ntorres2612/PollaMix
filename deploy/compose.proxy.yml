@@ -1,0 +1,23 @@
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      PRD_DOMAIN: ${PRD_DOMAIN:?Configure PRD_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend-prd
+      - backend-prd
+    networks:
+      - prd_app
+
+volumes:
+  caddy_data:
+  caddy_config:

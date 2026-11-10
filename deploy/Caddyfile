@@ -1,0 +1,11 @@
+{$PRD_DOMAIN} {
+    encode zstd gzip
+
+    handle_path /api/* {
+        reverse_proxy backend-prd:3001
+    }
+
+    handle {
+        reverse_proxy frontend-prd:3000
+    }
+}

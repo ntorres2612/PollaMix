@@ -1,0 +1,46 @@
+name: golpro
+
+services:
+  postgres-prd:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: golpro_prd
+      POSTGRES_USER: golpro_prd_user
+      POSTGRES_PASSWORD: ${PRD_DB_PASSWORD:?Configure PRD_DB_PASSWORD}
+    volumes:
+      - postgres_prd_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U golpro_prd_user -d golpro_prd"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - prd_private
+
+  postgres-qa:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: golpro_qa
+      POSTGRES_USER: golpro_qa_user
+      POSTGRES_PASSWORD: ${QA_DB_PASSWORD:?Configure QA_DB_PASSWORD}
+    volumes:
+      - postgres_qa_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U golpro_qa_user -d golpro_qa"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qa_private
+
+volumes:
+  postgres_prd_data:
+  postgres_qa_data:
+
+networks:
+  prd_private:
+    internal: true
+  qa_private:
+    internal: true
