@@ -3,6 +3,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 
@@ -41,6 +42,19 @@ export class FootballApiController {
     return this.footballApiService.importTeams(
       Number(leagueId),
       Number(season),
+    );
+  }
+
+  @Post('import/available')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  importAvailable(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.footballApiService.importAvailableMatches(
+      from,
+      to,
     );
   }
 

@@ -2,7 +2,7 @@ import {
   calculatePrizeDistribution,
 } from './prize-distribution';
 
-describe('Distribución de premios PollaMix', () => {
+describe('Distribución de premios GolPro', () => {
   it('calcula 67,81 % de premios y 32,19 % de margen', () => {
     const result = calculatePrizeDistribution(
       480000,

@@ -11,6 +11,7 @@ import {
 } from "@/lib/tournaments";
 
 import type { ApiMatch } from "@/types/match";
+import { teamNameEs } from "@/lib/team-name";
 
 interface Props {
   tournamentId: number;
@@ -216,7 +217,7 @@ export default function AdminClaimCorrection({
 
               {matches.map((match) => (
                 <option key={match.id} value={match.id}>
-                  {match.homeTeam.name} vs {match.awayTeam.name}
+                  {teamNameEs(match.homeTeam.name)} vs {teamNameEs(match.awayTeam.name)}
                   {" · ID "} {match.id}
                 </option>
               ))}
@@ -230,13 +231,13 @@ export default function AdminClaimCorrection({
               </p>
 
               <p className="mt-2 text-slate-300">
-                {selected.homeTeam.name}
+                {teamNameEs(selected.homeTeam.name)}
                 {" "}
                 {selected.homeScore ?? "—"}
                 {" - "}
                 {selected.awayScore ?? "—"}
                 {" "}
-                {selected.awayTeam.name}
+                {teamNameEs(selected.awayTeam.name)}
               </p>
 
               {!currentScored && (

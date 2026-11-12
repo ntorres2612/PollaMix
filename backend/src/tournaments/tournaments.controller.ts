@@ -64,6 +64,26 @@ export class TournamentsController {
     return this.tournamentsService.getCurrentForUser(Number(req.user.id));
   }
 
+  @Get('my-prizes')
+  @UseGuards(JwtAuthGuard)
+  getMyPrizes(@Req() req: any) {
+    return this.tournamentsService.getMyPrizes(Number(req.user.id));
+  }
+
+  @Get('upcoming-board')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  upcomingBoard() {
+    return this.tournamentsService.getUpcomingBoard();
+  }
+
+  @Post('open')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  open(@Body() body: unknown) {
+    return this.tournamentsService.openFromSelection(body);
+  }
+
   @Get(':id/ranking')
   getRanking(@Param('id') id: string) {
     return this.tournamentsService.getRanking(Number(id));
@@ -191,15 +211,35 @@ export class TournamentsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   getPrizesAdmin(@Param('id') id: string) {
-    return this.tournamentsService.getPrizes(Number(id));
+    return this.tournamentsService.getPrizes(Number(id), 'admin');
+  }
+
+  @Post(':id/prize-payouts')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  markWinnerPaid(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() req: any,
+  ) {
+    const data =
+      body !== null && typeof body === 'object' && !Array.isArray(body)
+        ? body as { entryId?: number }
+        : {};
+
+    return this.tournamentsService.markWinnerPaid(
+      Number(id),
+      Number(data.entryId),
+      Number(req.user.id),
+    );
   }
 
   @Get(':id/prizes')
   async getPrizes(@Param('id') id: string) {
     const data = await this.tournamentsService.getPrizes(Number(id));
 
-    // Contrato público: nunca devolver recaudación,
-    // utilidad, cantidad de pagos ni contabilidad.
+    // El jugador ve los premios de los puestos 1, 2 y 3.
+    // No recibe la lista de ganadores ni la ganancia del administrador.
     return {
       tournamentId: data.tournamentId,
       published: data.published,
@@ -207,7 +247,7 @@ export class TournamentsController {
       closedAt: data.finalized === true ? data.closedAt : null,
       currency: data.currency,
       prizes: data.prizes,
-      message: data.message,
+      message: data.prizes ? undefined : data.message,
     };
   }
 
@@ -215,6 +255,12 @@ export class TournamentsController {
   @UseGuards(JwtAuthGuard)
   getMyStatus(@Param('id') id: string, @Req() req: any) {
     return this.tournamentsService.getMyStatus(Number(id), Number(req.user.id));
+  }
+
+  @Get(':id/my-entries')
+  @UseGuards(JwtAuthGuard)
+  getMyEntries(@Param('id') id: string, @Req() req: any) {
+    return this.tournamentsService.getMyEntries(Number(id), Number(req.user.id));
   }
 
   @Get(':id/available-matches')

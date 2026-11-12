@@ -1,10 +1,12 @@
 export interface PrizeCandidate {
   userId: number;
+  entryId?: number;
   points: number;
 }
 
 export interface PrizeWinner {
   userId: number;
+  entryId?: number;
   points: number;
   position: number;
   amountCOP: number;
@@ -34,20 +36,28 @@ export function calculatePrizeDistribution(
     throw new Error('Recaudación COP inválida.');
   }
 
-  const ids = new Set<number>();
+  const ids = new Set<string>();
 
   for (const candidate of candidates) {
+    const slipKey =
+      candidate.entryId != null
+        ? `entry:${candidate.entryId}`
+        : `user:${candidate.userId}`;
+
     if (
       !Number.isSafeInteger(candidate.userId) ||
       candidate.userId <= 0 ||
       !Number.isSafeInteger(candidate.points) ||
       candidate.points < 0 ||
-      ids.has(candidate.userId)
+      (candidate.entryId != null &&
+        (!Number.isSafeInteger(candidate.entryId) ||
+          candidate.entryId <= 0)) ||
+      ids.has(slipKey)
     ) {
       throw new Error('Participante o puntuación inválidos.');
     }
 
-    ids.add(candidate.userId);
+    ids.add(slipKey);
   }
 
   const prizePoolCOP = Math.round(
@@ -79,7 +89,10 @@ export function calculatePrizeDistribution(
     // Un mismo puntaje representa una misma posición.
     const tied = candidates
       .filter((p) => p.points === points)
-      .sort((a, b) => a.userId - b.userId);
+      .sort(
+        (a, b) =>
+          (a.entryId ?? a.userId) - (b.entryId ?? b.userId),
+      );
 
     const base = Math.floor(amount / tied.length);
     const remainder = amount % tied.length;
@@ -87,6 +100,7 @@ export function calculatePrizeDistribution(
     tied.forEach((player, index) => {
       winners.push({
         userId: player.userId,
+        ...(player.entryId != null ? { entryId: player.entryId } : {}),
         points: player.points,
         position,
         amountCOP: base + (index < remainder ? 1 : 0),

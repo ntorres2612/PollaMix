@@ -10,7 +10,7 @@ import {
 } from '@/lib/auth';
 
 import {
-  approveParticipantPayment,
+  buildAdminSlips,
   getTournamentPayments,
   getTournamentPrizesAdmin,
   closeTournamentPrizes,
@@ -20,6 +20,7 @@ import {
   getTournamentRanking,
   TournamentDetail,
   TournamentRankingEntry,
+  updatePaymentStatus,
 } from '@/lib/tournaments';
 
 function formatDate(value: string) {
@@ -170,41 +171,42 @@ export default function AdminTournamentDetailPage() {
     return getRegistrationStatus(tournament);
   }, [tournament]);
 
-  function getLatestParticipantPayment(
-    participantId: number,
-  ): TournamentPayment | undefined {
-    return payments
-      .filter((payment) => payment.participantId === participantId)
-      .sort((a, b) => b.id - a.id)[0];
-  }
+  const slips = useMemo(
+    () =>
+      tournament
+        ? buildAdminSlips(tournament.participants, payments)
+        : [],
+    [tournament, payments],
+  );
 
-  async function handleApprovePayment(
-    participantId: number,
-  ) {
+  const pendingSlips = slips.filter(
+    (slip) => slip.payment?.status === 'PENDING',
+  );
+
+  async function handleApprovePayment(paymentId: number) {
     try {
-      const payment = getLatestParticipantPayment(participantId);
+      const payment = payments.find((item) => item.id === paymentId);
 
       if (!payment || payment.status !== 'PENDING') {
-        setError('Este participante no tiene un pago pendiente para aprobar.');
+        setError('Este pronóstico no tiene un pago pendiente para aprobar.');
         return;
       }
 
-      setApprovingPayment(participantId);
+      setApprovingPayment(paymentId);
       setError('');
 
-      await approveParticipantPayment(
-        tournamentId,
-        participantId,
-      );
+      await updatePaymentStatus(paymentId, 'APPROVED');
 
-      const [updated, updatedPayments] =
+      const [updated, updatedPayments, rankingData] =
         await Promise.all([
           getTournament(tournamentId),
           getTournamentPayments(tournamentId),
+          getTournamentRanking(tournamentId),
         ]);
 
       setTournament(updated);
       setPayments(updatedPayments);
+      setRanking(rankingData);
     } catch (error) {
       console.error(
         'Error aprobando pago:',
@@ -384,9 +386,7 @@ export default function AdminTournamentDetailPage() {
                 </p>
 
                 <p className="mt-2 text-2xl font-black">
-                  {tournament.id === 7
-                    ? 'US$5.00'
-                    : `$${tournament.inscription.toLocaleString('es-CO')}`}
+                  {`$${tournament.inscription.toLocaleString('es-CO')}`}
                 </p>
               </div>
 
@@ -403,10 +403,13 @@ export default function AdminTournamentDetailPage() {
                         currency: 'COP',
                         maximumFractionDigits: 0,
                       })
-                    : tournament.id === 7
-                      ? `${tournament.prize.toLocaleString('es-CO')} (moneda por verificar)`
-                      : `$${tournament.prize.toLocaleString('es-CO')}`}
+                    : 'Según inscritos'}
                 </p>
+                {!prizes?.finalized && (
+                  <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                    67,81% de lo recaudado: 70% / 20% / 10%.
+                  </p>
+                )}
               </div>
 
               <div className="rounded-2xl bg-slate-950/60 p-5">
@@ -416,11 +419,6 @@ export default function AdminTournamentDetailPage() {
 
                 <p className="mt-2 text-2xl font-black">
                   {tournament.participants.length}
-
-                  <span className="text-base text-slate-500">
-                    {' '}
-                    / {tournament.maxPlayers}
-                  </span>
                 </p>
               </div>
             </div>
@@ -513,7 +511,7 @@ export default function AdminTournamentDetailPage() {
                         money: true,
                       },
                       {
-                        label: 'Utilidad de GolPro',
+                        label: 'Ganancia del administrador',
                         amount: prizes.profitCOP,
                         money: true,
                       },
@@ -602,10 +600,13 @@ export default function AdminTournamentDetailPage() {
                 {!!prizes.winners?.length && (
                   <div className="mt-6 space-y-2">
                     <h3 className="font-bold">
-                      {prizes.finalized ? 'Ganadores oficiales' : 'Ganadores calculados (provisionales)'}
+                      {prizes.finalized ? 'Ganadores oficiales' : 'Valor de cada ganador'}
                     </h3>
-                    {prizes.winners.map((winner) => (
-                      <div key={winner.userId} className="flex flex-wrap justify-between gap-3 rounded-xl bg-slate-950/60 p-4 text-sm">
+                    <p className="text-sm text-slate-400">
+                      Cada puesto reparte su premio entre quienes lo comparten. Esta lista solo se ve en administración.
+                    </p>
+                    {prizes.winners.map((winner, index) => (
+                      <div key={`${winner.entryId ?? winner.userId}-${winner.position}-${index}`} className="flex flex-wrap justify-between gap-3 rounded-xl bg-slate-950/60 p-4 text-sm">
                         <span>
                           Puesto {winner.position}: {winner.name}
                           {' '}({winner.points} puntos)
@@ -736,77 +737,71 @@ export default function AdminTournamentDetailPage() {
                 </div>
 
                 <span className="rounded-full bg-white/5 px-3 py-1 text-sm text-slate-300">
-                  {tournament.participants.length}
+                  {slips.length}
                 </span>
               </div>
 
+              <p className="mt-3 text-sm text-slate-400">
+                Cada pronóstico del mismo jugador aparece por separado, con su propio pago.
+              </p>
+
               <div className="mt-6 space-y-3">
-                {tournament.participants.length ===
-                0 ? (
+                {slips.length === 0 ? (
                   <div className="rounded-xl bg-slate-950/50 p-6 text-center text-slate-400">
                     Todavía no hay participantes.
                   </div>
                 ) : (
-                  tournament.participants.map(
-                    (participant) => (
+                  slips.map((slip) => (
                       <div
-                        key={participant.id}
+                        key={slip.key}
                         className="flex flex-col gap-4 rounded-2xl bg-slate-950/50 p-4 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="min-w-0">
                           <p className="truncate font-bold text-white">
-                            {participant.user.name}
+                            {slip.name}
                           </p>
 
                           <p className="truncate text-sm text-slate-500">
-                            {participant.user.email}
+                            {slip.email}
                           </p>
                         </div>
 
                         <div className="flex shrink-0 items-center gap-3">
                           <span
                             className={`rounded-full px-3 py-1 text-xs font-bold ${
-                              participant.paid
+                              slip.paid
                                 ? 'bg-green-500/15 text-green-400'
-                                : getLatestParticipantPayment(participant.id)?.status === 'REJECTED'
+                                : slip.payment?.status === 'REJECTED'
                                   ? 'bg-red-500/15 text-red-400'
                                   : 'bg-yellow-500/15 text-yellow-400'
                             }`}
                           >
-                            {participant.paid
+                            {slip.paid
                               ? 'PAGADO'
-                              : getLatestParticipantPayment(participant.id)?.status === 'REJECTED'
+                              : slip.payment?.status === 'REJECTED'
                                 ? 'RECHAZADO'
-                                : getLatestParticipantPayment(participant.id)?.status === 'PENDING'
+                                : slip.payment?.status === 'PENDING'
                                   ? 'PENDIENTE'
                                   : 'SIN PAGO'}
                           </span>
 
-                          {!participant.paid &&
-                            getLatestParticipantPayment(participant.id)?.status === 'PENDING' && (
+                          {slip.payment?.status === 'PENDING' && (
                             <button
                               type="button"
                               onClick={() =>
-                                handleApprovePayment(
-                                  participant.id,
-                                )
+                                handleApprovePayment(slip.payment!.id)
                               }
-                              disabled={
-                                approvingPayment ===
-                                participant.id
-                              }
+                              disabled={approvingPayment === slip.payment.id}
                               className="rounded-lg bg-green-600 px-3 py-2 text-xs font-black text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {approvingPayment ===
-                              participant.id
+                              {approvingPayment === slip.payment.id
                                 ? 'Aprobando...'
                                 : 'Aprobar pago'}
                             </button>
                           )}
                         </div>
                       </div>
-                    ),
-                  )
+                    ))
                 )}
               </div>
             </section>
@@ -838,6 +833,32 @@ export default function AdminTournamentDetailPage() {
               </div>
 
               <div className="mt-6 space-y-3">
+                {pendingSlips.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                      Pendientes de pago
+                    </p>
+                    {pendingSlips.map((slip) => (
+                      <div
+                        key={slip.key}
+                        className="flex items-center gap-4 rounded-2xl border border-amber-500/20 bg-amber-950/20 p-4"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-bold text-white">
+                            {slip.name}
+                          </p>
+                          <p className="text-sm text-amber-200">
+                            Pronóstico pendiente
+                          </p>
+                        </div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                          Sin puntos
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {ranking.length === 0 ? (
                   <div className="rounded-xl bg-slate-950/50 p-6 text-center text-slate-400">
                     Todavía no hay puntos registrados.

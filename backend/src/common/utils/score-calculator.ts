@@ -1,6 +1,6 @@
 
 /**
- * Regla oficial de puntuación PollaMix.
+ * Regla oficial de puntuación GolPro.
  *
  * 1 punto: acierta ganador local, visitante o empate.
  * 0 puntos: resultado incorrecto.

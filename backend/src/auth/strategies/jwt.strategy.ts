@@ -52,6 +52,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       'sha256',
       process.env.JWT_SECRET!,
     )
+      // Mismo namespace que auth.service. No renombrar.
       .update('pollamix-session-v1:')
       .update(String(user.id))
       .update(':')

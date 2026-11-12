@@ -7,8 +7,7 @@ type HomeStats = {
   tournamentId: number;
   name: string;
   registered: number;
-  maxPlayers: number | null;
-  available: number | null;
+  predictions?: number;
   registrationOpen: boolean;
   registrationStartsAt: string;
   registrationEndsAt: string;
@@ -150,8 +149,7 @@ export default function HomeTournamentStats() {
     currentTime < registrationEnd &&
     currentTime < tournamentStart;
 
-  const registrationOpen = openByTime &&
-    (stats.maxPlayers === null || (stats.available ?? 0) > 0);
+  const registrationOpen = openByTime;
 
   const statusLabel = now === null
     ? "Consultando estado..."
@@ -177,10 +175,13 @@ export default function HomeTournamentStats() {
       <div className="mt-6 grid gap-5 sm:grid-cols-2">
         <div>
           <p className="text-4xl font-black text-white">
-            {stats.registered.toLocaleString("es-CO")}
+            {(stats.predictions ?? stats.registered).toLocaleString("es-CO")}
           </p>
           <p className="mt-1 text-sm text-slate-300">
-            Personas inscritas
+            Pronósticos realizados
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            {stats.registered.toLocaleString("es-CO")} personas inscritas
           </p>
         </div>
 
@@ -189,11 +190,6 @@ export default function HomeTournamentStats() {
             registrationOpen ? "text-green-400" : "text-amber-300"
           }`}>
             {statusLabel}
-          </p>
-          <p className="mt-1 text-sm text-slate-300">
-            {stats.maxPlayers === null
-              ? "Participación sin límite de cupos"
-              : `Cupo configurado: ${stats.maxPlayers}`}
           </p>
         </div>
       </div>

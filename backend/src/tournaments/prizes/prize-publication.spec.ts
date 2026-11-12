@@ -1,6 +1,6 @@
 import { canPublishWinners } from './prize-publication';
 
-describe('Publicación de ganadores PollaMix', () => {
+describe('Publicación de ganadores GolPro', () => {
   it('publica cuando se cumplen las tres condiciones', () => {
     expect(canPublishWinners({
       tournamentEnded: true,

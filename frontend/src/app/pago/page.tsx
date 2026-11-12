@@ -240,14 +240,22 @@ export default function PaymentPage() {
       [payments],
     );
 
-  const hasPendingPayment =
-    latestPayment?.status ===
-    "PENDING";
+  const paymentHistory = useMemo(() => {
+    const chronological = [...payments].sort(
+      (left, right) => left.id - right.id,
+    );
 
-  const hasApprovedPayment =
-    status?.paid ||
-    latestPayment?.status ===
-      "APPROVED";
+    return chronological
+      .map((payment, index) => ({
+        ...payment,
+        number: index + 1,
+      }))
+      .reverse();
+  }, [payments]);
+
+  const pendingPayments = paymentHistory.filter(
+    (payment) => payment.status === "PENDING",
+  );
 
   async function handleJoin() {
 
@@ -464,7 +472,10 @@ export default function PaymentPage() {
               </p>
 
               <p className="mt-2 text-2xl font-black text-white">
-                {formatCurrency(tournament.prize, tournament.currency)}
+                Según inscritos
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                El valor de cada ganador lo consulta el administrador.
               </p>
 
             </div>
@@ -551,153 +562,109 @@ export default function PaymentPage() {
 
           </section>
 
-        ) : hasApprovedPayment ? (
+        ) : payments.length > 0 ? (
 
-          /* Pago aprobado */
+          <div className="space-y-6">
 
-          <section className="rounded-3xl border border-emerald-500/20 bg-emerald-950/20 p-8 shadow-2xl">
+            {pendingPayments.length > 0 && (
 
-            <div className="mx-auto max-w-2xl text-center">
+              <section className="rounded-3xl border border-amber-500/20 bg-amber-950/20 p-8 shadow-2xl">
 
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 text-3xl text-emerald-400">
-                ✓
-              </div>
+                <div className="mx-auto max-w-2xl text-center">
 
-              <h2 className="mt-5 text-2xl font-black text-white">
-                Pago aprobado
-              </h2>
+                  <h2 className="text-2xl font-black">
+                    {pendingPayments.length === 1
+                      ? "Tienes un pago pendiente"
+                      : `Tienes ${pendingPayments.length} pagos pendientes`}
+                  </h2>
 
-              <p className="mt-3 text-slate-300">
-                Tu inscripción está confirmada. Ya puedes participar en la Polla.
+                  <p className="mt-3 text-slate-300">
+                    Cada pronóstico se paga por separado. El valor de cada uno es {formatCurrency(tournament.inscription, tournament.currency)}.
+                  </p>
+
+                  <BreBPaymentCard
+                    amount={tournament.inscription}
+                    currency={tournament.currency}
+                  />
+
+                </div>
+
+              </section>
+
+            )}
+
+            <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-2xl sm:p-8">
+
+              <p className="text-sm font-bold uppercase tracking-wider text-red-400">
+                Historial de pagos
               </p>
 
-              {latestPayment && (
+              <h2 className="mt-2 text-2xl font-black text-white">
+                Pagos de tus pronósticos
+              </h2>
 
-                <div className="mx-auto mt-6 max-w-md rounded-2xl border border-white/10 bg-black/10 p-5 text-left">
+              <div className="mt-6 space-y-3">
 
-                  <div className="flex justify-between gap-4">
+                {paymentHistory.map((payment) => (
 
-                    <span className="text-slate-500">
-                      Referencia
-                    </span>
+                  <article
+                    key={payment.id}
+                    className="rounded-2xl border border-white/10 bg-slate-950/50 p-5"
+                  >
 
-                    <span className="font-bold text-white">
-                      {latestPayment.reference}
-                    </span>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
 
-                  </div>
+                      <p className="font-black text-white">
+                        Pronóstico {payment.number}
+                      </p>
 
-                  <div className="mt-3 flex justify-between gap-4">
-
-                    <span className="text-slate-500">
-                      Valor
-                    </span>
-
-                    <span className="font-bold text-white">
-                      {formatCurrency(latestPayment.amount, latestPayment.currency)}
-                    </span>
-
-                  </div>
-
-                  {latestPayment.paidAt && (
-
-                    <div className="mt-3 flex justify-between gap-4">
-
-                      <span className="text-slate-500">
-                        Aprobado
-                      </span>
-
-                      <span className="text-right text-sm font-semibold text-emerald-400">
-                        {formatDate(
-                          latestPayment.paidAt,
-                        )}
+                      <span className={
+                        "rounded-full px-3 py-1 text-xs font-bold " +
+                        (payment.status === "APPROVED"
+                          ? "bg-emerald-500/15 text-emerald-300"
+                          : payment.status === "REJECTED"
+                            ? "bg-red-500/15 text-red-300"
+                            : "bg-amber-500/15 text-amber-200")
+                      }>
+                        {payment.status === "APPROVED"
+                          ? "Pagado"
+                          : payment.status === "REJECTED"
+                            ? "Rechazado"
+                            : payment.status === "CANCELLED"
+                              ? "Cancelado"
+                              : "Pendiente"}
                       </span>
 
                     </div>
 
-                  )}
+                    <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
 
-                </div>
+                      <p className="text-slate-300">
+                        <span className="block text-xs text-slate-500">Valor</span>
+                        {formatCurrency(payment.amount, payment.currency)}
+                      </p>
 
-              )}
+                      <p className="break-all text-slate-300">
+                        <span className="block text-xs text-slate-500">Referencia</span>
+                        {payment.reference}
+                      </p>
 
-            </div>
-
-          </section>
-
-        ) : hasPendingPayment ? (
-
-          /* Pago pendiente */
-
-          <section className="rounded-3xl border border-amber-500/20 bg-amber-950/20 p-8 shadow-2xl">
-
-            <div className="mx-auto max-w-2xl text-center">
-
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/15 text-3xl">
-                ⏳
-              </div>
-
-              <h2 className="mt-5 text-2xl font-black">
-                Pago pendiente de revisión
-              </h2>
-
-              <p className="mt-3 text-slate-300">
-                Tu solicitud está pendiente de verificación. Todavía no se ha confirmado la recepción del dinero.
-              </p>
-
-              <BreBPaymentCard amount={tournament.inscription} currency={tournament.currency} />
-
-              {latestPayment && (
-
-                <div className="mx-auto mt-6 max-w-md rounded-2xl border border-white/10 bg-black/10 p-5 text-left">
-
-                  <div className="flex justify-between gap-4">
-
-                    <span className="text-slate-500">
-                      Referencia
-                    </span>
-
-                    <span className="font-bold text-white">
-                      {latestPayment.reference}
-                    </span>
-
-                  </div>
-
-                  <div className="mt-3 flex justify-between gap-4">
-
-                    <span className="text-slate-500">
-                      Valor
-                    </span>
-
-                    <span className="font-bold text-white">
-                      {formatCurrency(latestPayment.amount, latestPayment.currency)}
-                    </span>
-
-                  </div>
-
-                  {latestPayment.method && (
-
-                    <div className="mt-3 flex justify-between gap-4">
-
-                      <span className="text-slate-500">
-                        Método
-                      </span>
-
-                      <span className="font-semibold text-white">
-                        {latestPayment.method}
-                      </span>
+                      <p className="text-slate-300">
+                        <span className="block text-xs text-slate-500">Fecha</span>
+                        {formatDate(payment.paidAt || payment.createdAt)}
+                      </p>
 
                     </div>
 
-                  )}
+                  </article>
 
-                </div>
+                ))}
 
-              )}
+              </div>
 
-            </div>
+            </section>
 
-          </section>
+          </div>
 
         ) : (
 

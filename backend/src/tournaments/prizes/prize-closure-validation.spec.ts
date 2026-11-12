@@ -3,7 +3,7 @@ import {
   type ClosureValidationInput,
 } from './prize-closure-validation';
 
-describe('Validación de cierre definitivo PollaMix', () => {
+describe('Validación de cierre definitivo GolPro', () => {
   const validInput = (): ClosureValidationInput => ({
     tournamentEnded: true,
     inscriptionCOP: 16000,

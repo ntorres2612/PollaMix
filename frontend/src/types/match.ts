@@ -37,4 +37,9 @@ export interface ApiMatch {
   homeTeam: ApiTeam;
   awayTeam: ApiTeam;
   matchday: ApiMatchday;
+  league?: {
+    id: number;
+    name: string;
+    country: string;
+  };
 }

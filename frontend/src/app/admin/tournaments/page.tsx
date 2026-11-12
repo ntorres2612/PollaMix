@@ -17,7 +17,6 @@ type PrizeListResult =
   | { ok: false };
 
 function TournamentPrizeCell({
-  tournament,
   result,
 }: {
   tournament: Tournament;
@@ -29,9 +28,7 @@ function TournamentPrizeCell({
 
   const label = closed
     ? 'Bolsa definitiva'
-    : result?.ok
-      ? 'Premio configurado'
-      : 'Información de premios';
+    : 'Premio según inscritos';
 
   const amount =
     !result || !result.ok
@@ -44,14 +41,7 @@ function TournamentPrizeCell({
               maximumFractionDigits: 0,
             })
           : 'No disponible'
-        : tournament.currency === 'COP'
-          ? tournament.prize.toLocaleString('es-CO', {
-              style: 'currency',
-              currency: 'COP',
-              maximumFractionDigits: 0,
-            })
-          : tournament.prize.toLocaleString('es-CO') +
-            ' ' + tournament.currency;
+        : '67,81% de lo recaudado';
 
   return (
     <div className="rounded-xl bg-slate-950/60 p-4">
@@ -161,18 +151,38 @@ export default function AdminTournamentsPage() {
     <main className="min-h-screen bg-slate-950 py-10 text-white">
       <Container>
         <div className="mx-auto max-w-6xl">
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            className="mb-8 text-sm font-semibold text-slate-400 transition hover:text-white"
+          >
+            ← Volver al inicio
+          </button>
+
           <div className="mb-10">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-400">
               Administración
             </p>
 
-            <h1 className="mt-2 text-4xl font-black">
-              Mis Pollas
-            </h1>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h1 className="mt-2 text-4xl font-black">
+                  Mis Pollas
+                </h1>
 
-            <p className="mt-3 text-slate-400">
-              Administra torneos, participantes y partidos.
-            </p>
+                <p className="mt-3 text-slate-400">
+                  Elige la jornada y los partidos para abrir la inscripción.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => router.push('/admin/tournaments/new')}
+                className="rounded-xl bg-red-600 px-5 py-3 font-black text-white transition hover:bg-red-500"
+              >
+                Armar Polla
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -188,7 +198,7 @@ export default function AdminTournamentsPage() {
               </h2>
 
               <p className="mt-2 text-slate-400">
-                Todavía no existen torneos para administrar.
+                Abre una Polla, elige el campeonato y marca los 10 partidos.
               </p>
             </div>
           ) : (

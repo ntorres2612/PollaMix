@@ -15,6 +15,7 @@ import {
 } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
+import { teamNameEs } from "@/lib/team-name";
 
 import {
   getSelectedTournamentMatches,
@@ -350,7 +351,7 @@ export default function TournamentScoringPage() {
 
     const confirmed =
       window.confirm(
-        `¿Calcular los puntos del partido ${match.homeTeam.name} vs ${match.awayTeam.name}?`,
+        `¿Calcular los puntos del partido ${teamNameEs(match.homeTeam.name)} vs ${teamNameEs(match.awayTeam.name)}?`,
       );
 
     if (!confirmed) {
@@ -374,7 +375,7 @@ export default function TournamentScoringPage() {
       await loadData();
 
       setSuccess(
-        `${match.homeTeam.name} ${result.result.homeScore} - ${result.result.awayScore} ${match.awayTeam.name}: ${result.scored} pronóstico(s) puntuado(s).`,
+        `${teamNameEs(match.homeTeam.name)} ${result.result.homeScore} - ${result.result.awayScore} ${teamNameEs(match.awayTeam.name)}: ${result.scored} pronóstico(s) puntuado(s).`,
       );
 
     } catch (err) {
@@ -866,7 +867,7 @@ export default function TournamentScoringPage() {
 
                           <p className="font-black text-white">
                             {
-                              match.homeTeam.name
+                              teamNameEs(match.homeTeam.name)
                             }
                           </p>
 
@@ -906,7 +907,7 @@ export default function TournamentScoringPage() {
 
                           <p className="font-black text-white">
                             {
-                              match.awayTeam.name
+                              teamNameEs(match.awayTeam.name)
                             }
                           </p>
 

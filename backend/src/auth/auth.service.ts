@@ -113,6 +113,7 @@ export class AuthService {
       name: user.name,
       role: user.role,
       pwdv: createHmac('sha256', process.env.JWT_SECRET!)
+        // Namespace estable. Cambiarlo invalida los tokens ya emitidos.
         .update('pollamix-session-v1:')
         .update(String(user.id))
         .update(':')

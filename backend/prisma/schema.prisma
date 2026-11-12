@@ -32,10 +32,13 @@ model User {
   predictions  Prediction[]
   payments     Payment[]
   participants TournamentParticipant[]
+  pollEntries  PollEntry[]
   passwordResetTokens PasswordResetToken[]
   tournamentClaims TournamentClaim[]
   resultCorrections TournamentResultCorrection[]
   noCorrectionResolutions TournamentClaimNoCorrectionResolution[]
+  prizePayouts PrizePayout[] @relation("PrizeWinner")
+  prizePayoutsRegistered PrizePayout[] @relation("PrizePayer")
 }
 
 model League {
@@ -83,12 +86,14 @@ model Tournament {
   createdAt DateTime @default(now())
 
   participants TournamentParticipant[]
+  pollEntries  PollEntry[]
   predictions  Prediction[]
   payments     Payment[]
   prizeClosure TournamentPrizeClosure?
   resultsPublishedAt DateTime?
   claims TournamentClaim[]
   resultsRevisedAt DateTime?
+  prizePayouts PrizePayout[]
 }
 
 model TournamentParticipant {
@@ -107,6 +112,30 @@ model TournamentParticipant {
 
   @@unique([tournamentId, userId])
   predictionsSubmittedAt DateTime?
+  pollEntries PollEntry[]
+}
+
+model PollEntry {
+  id Int @id @default(autoincrement())
+
+  tournamentId Int
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  participantId Int
+  participant   TournamentParticipant @relation(fields: [participantId], references: [id])
+
+  paid Boolean @default(false)
+  predictionsSubmittedAt DateTime?
+  createdAt DateTime @default(now())
+
+  predictions Prediction[]
+  payments    Payment[]
+
+  @@index([tournamentId, userId])
+  @@index([participantId])
 }
 
 model Team {
@@ -186,12 +215,14 @@ model Prediction {
   userId       Int
   matchId      Int
   tournamentId Int
+  entryId      Int
 
   user       User       @relation(fields: [userId], references: [id])
   match      Match      @relation(fields: [matchId], references: [id])
   tournament Tournament @relation(fields: [tournamentId], references: [id])
+  entry      PollEntry  @relation(fields: [entryId], references: [id])
 
-  @@unique([userId, matchId, tournamentId])
+  @@unique([entryId, matchId])
   @@index([userId])
   @@index([matchId])
   @@index([tournamentId])
@@ -216,9 +247,13 @@ model Payment {
   participantId Int?
   participant   TournamentParticipant? @relation(fields: [participantId], references: [id])
 
+  entryId Int?
+  entry   PollEntry? @relation(fields: [entryId], references: [id])
+
   @@index([userId])
   @@index([tournamentId])
   @@index([participantId])
+  @@index([entryId])
 }
 
 model Prize {
@@ -273,6 +308,23 @@ model TournamentPrizeClosure {
 
   rulesVersion String @default("1.0")
   closedAt     DateTime @default(now())
+}
+
+model PrizePayout {
+  id           Int      @id @default(autoincrement())
+  tournamentId Int
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Restrict)
+  entryId      Int?
+  userId       Int
+  user         User     @relation("PrizeWinner", fields: [userId], references: [id], onDelete: Restrict)
+  amountCOP    Int
+  paidAt       DateTime @default(now())
+  adminId      Int
+  admin        User     @relation("PrizePayer", fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@unique([tournamentId, entryId])
+  @@index([userId])
+  @@index([tournamentId])
 }
 
 

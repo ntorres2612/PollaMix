@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { TournamentsService } from '../tournaments.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
-describe('PollaMix - integración de premios', () => {
+describe('GolPro - integración de premios', () => {
   let service: TournamentsService;
 
   const prisma = {
@@ -78,6 +78,8 @@ describe('PollaMix - integración de premios', () => {
         ranking.map((p, i) => ({
           ...p,
           position: i + 1,
+          userId: p.id,
+          entryId: p.id,
         })),
       );
   });

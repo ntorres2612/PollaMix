@@ -14,13 +14,14 @@ import {
 } from '@/lib/tournaments';
 import { getCurrentUser } from '@/lib/auth';
 
-const PARTICIPATION_PRICE_USD = 5;
+function formatParticipationPrice(amount: number, currency: string): string {
+  const code = currency === 'USD' ? 'USD' : 'COP';
 
-function formatUSD(value: number): string {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat(code === 'USD' ? 'en-US' : 'es-CO', {
     style: 'currency',
-    currency: 'USD',
-  }).format(value);
+    currency: code,
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 function formatDate(value: string): string {
@@ -162,12 +163,18 @@ export default function CurrentTournamentMatches() {
           <div className="grid gap-4 p-6 sm:grid-cols-3 sm:p-10">
             <div className="rounded-2xl bg-slate-800/80 p-5">
               <p className="text-sm text-slate-400">Valor por participación</p>
-              <p className="mt-2 text-2xl font-black text-white">{formatUSD(PARTICIPATION_PRICE_USD)}</p>
+              <p className="mt-2 text-2xl font-black text-white">
+                {formatParticipationPrice(tournament.inscription, tournament.currency)}
+              </p>
             </div>
             <div className="rounded-2xl bg-slate-800/80 p-5">
-              <p className="text-sm text-slate-400">Participantes inscritos</p>
-              <p className="mt-2 text-2xl font-black text-white">{status?.participantsCount ?? '—'}</p>
-              <p className="mt-1 text-xs text-slate-400">Cupos máximos: {tournament.maxPlayers}</p>
+              <p className="text-sm text-slate-400">Pronósticos realizados</p>
+              <p className="mt-2 text-2xl font-black text-white">
+                {tournament.predictionsCount ?? status?.predictionsCount ?? '—'}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                {tournament.participantsCount ?? status?.participantsCount ?? '—'} personas inscritas
+              </p>
             </div>
             <div className="rounded-2xl bg-slate-800/80 p-5">
               <p className="text-sm text-slate-400">Estado de inscripciones</p>
@@ -187,7 +194,7 @@ export default function CurrentTournamentMatches() {
             <div className="mt-6">
               {!currentUser && registrationOpen && (
                 <Link href="/login" className="inline-block rounded-xl bg-red-600 px-8 py-4 font-black text-white transition hover:bg-red-500">
-                  Participar · {formatUSD(PARTICIPATION_PRICE_USD)}
+                  Participar · {formatParticipationPrice(tournament.inscription, tournament.currency)}
                 </Link>
               )}
 
@@ -206,7 +213,7 @@ export default function CurrentTournamentMatches() {
                   disabled={joining}
                   className="rounded-xl bg-red-600 px-8 py-4 font-black text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {joining ? 'Registrando inscripción...' : `Participar · ${formatUSD(PARTICIPATION_PRICE_USD)}`}
+                  {joining ? 'Registrando inscripción...' : `Participar · ${formatParticipationPrice(tournament.inscription, tournament.currency)}`}
                 </button>
               )}
 

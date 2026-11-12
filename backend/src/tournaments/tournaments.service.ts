@@ -94,6 +94,230 @@ export class TournamentsService {
     });
   }
 
+  async getUpcomingBoard() {
+    const matches = await this.prisma.match.findMany({
+      where: {
+        finished: false,
+        date: { gt: new Date() },
+      },
+      select: {
+        id: true,
+        date: true,
+        leagueId: true,
+        homeTeam: { select: { name: true } },
+        awayTeam: { select: { name: true } },
+        league: { select: { name: true, country: true } },
+        matchday: {
+          select: {
+            id: true,
+            season: true,
+            roundName: true,
+            number: true,
+          },
+        },
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    const championships = new Map<string, {
+      leagueId: number;
+      season: number;
+      name: string;
+      country: string;
+      rounds: Array<{
+        id: number;
+        roundName: string;
+        number: number | null;
+        matches: Array<{
+          id: number;
+          date: string;
+          homeTeam: string;
+          awayTeam: string;
+        }>;
+      }>;
+    }>();
+
+    for (const match of matches) {
+      const key = `${match.leagueId}:${match.matchday.season}`;
+      let championship = championships.get(key);
+
+      if (!championship) {
+        championship = {
+          leagueId: match.leagueId,
+          season: match.matchday.season,
+          name: match.league.name,
+          country: match.league.country,
+          rounds: [],
+        };
+        championships.set(key, championship);
+      }
+
+      let round = championship.rounds.find(
+        (item) => item.id === match.matchday.id,
+      );
+
+      if (!round) {
+        round = {
+          id: match.matchday.id,
+          roundName: match.matchday.roundName,
+          number: match.matchday.number,
+          matches: [],
+        };
+        championship.rounds.push(round);
+      }
+
+      round.matches.push({
+        id: match.id,
+        date: match.date.toISOString(),
+        homeTeam: match.homeTeam.name,
+        awayTeam: match.awayTeam.name,
+      });
+    }
+
+    return {
+      championships: [...championships.values()]
+        .map((championship) => ({
+          ...championship,
+          upcoming: championship.rounds.reduce(
+            (total, round) => total + round.matches.length,
+            0,
+          ),
+        }))
+        .sort((a, b) =>
+          b.upcoming - a.upcoming ||
+          a.name.localeCompare(b.name, 'es'),
+        ),
+    };
+  }
+
+  async openFromSelection(body: unknown) {
+    if (
+      body === null ||
+      typeof body !== 'object' ||
+      Array.isArray(body)
+    ) {
+      throw new BadRequestException('La solicitud no es válida.');
+    }
+
+    const input = body as Record<string, unknown>;
+    const name = typeof input.name === 'string' ? input.name.trim() : '';
+    const description =
+      typeof input.description === 'string' && input.description.trim()
+        ? input.description.trim()
+        : null;
+    const inscription = Number(input.inscription);
+    const currency = input.currency === 'USD' ? 'USD' : 'COP';
+    const matchIds = Array.isArray(input.matchIds)
+      ? [...new Set(input.matchIds.map((id) => Number(id)))]
+      : [];
+
+    if (name.length < 3 || name.length > 120) {
+      throw new BadRequestException(
+        'El nombre de la Polla debe tener entre 3 y 120 caracteres.',
+      );
+    }
+
+    if (
+      !Number.isFinite(inscription) ||
+      inscription < 0
+    ) {
+      throw new BadRequestException(
+        'Revisa el valor de la inscripción.',
+      );
+    }
+
+    if (
+      matchIds.length !== 10 ||
+      matchIds.some((id) => !Number.isSafeInteger(id) || id <= 0)
+    ) {
+      throw new BadRequestException(
+        'Debes seleccionar exactamente 10 partidos.',
+      );
+    }
+
+    const matches = await this.prisma.match.findMany({
+      where: { id: { in: matchIds } },
+      include: { matchday: true },
+    });
+
+    if (matches.length !== 10) {
+      throw new BadRequestException(
+        'Uno o más partidos ya no están disponibles.',
+      );
+    }
+
+    const now = Date.now();
+    if (
+      matches.some(
+        (match) => match.finished || match.date.getTime() <= now,
+      )
+    ) {
+      throw new BadRequestException(
+        'Todos los partidos seleccionados deben ser futuros.',
+      );
+    }
+
+    const earliest = Math.min(
+      ...matches.map((match) => match.date.getTime()),
+    );
+    const latest = Math.max(
+      ...matches.map((match) => match.date.getTime()),
+    );
+    const registrationEndsAt = earliest - 60 * 60 * 1000;
+
+    if (registrationEndsAt <= now + 60 * 1000) {
+      throw new BadRequestException(
+        'El primer partido queda demasiado cerca. Elige partidos que empiecen al menos dentro de una hora para abrir la inscripción.',
+      );
+    }
+
+    const leagueCounts = new Map<number, number>();
+    for (const match of matches) {
+      leagueCounts.set(
+        match.leagueId,
+        (leagueCounts.get(match.leagueId) ?? 0) + 1,
+      );
+    }
+    const leagueId = [...leagueCounts.entries()].sort(
+      (a, b) => b[1] - a[1],
+    )[0][0];
+    const season = matches.find(
+      (match) => match.leagueId === leagueId,
+    )!.matchday.season;
+
+    const tournament = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.tournament.create({
+        data: {
+          name,
+          description,
+          leagueId,
+          season,
+          inscription,
+          currency,
+          prize: 0,
+          maxPlayers: 0,
+          registrationStartsAt: new Date(now),
+          registrationEndsAt: new Date(registrationEndsAt),
+          predictionsCloseAt: new Date(registrationEndsAt),
+          startsAt: new Date(registrationEndsAt + 60 * 1000),
+          endsAt: new Date(latest + 6 * 60 * 60 * 1000),
+        },
+      });
+
+      await tx.tournamentMatch.createMany({
+        data: matchIds.map((matchId, index) => ({
+          tournamentId: created.id,
+          matchId,
+          position: index + 1,
+        })),
+      });
+
+      return created;
+    });
+
+    return tournament;
+  }
+
   // ============================================================
   // TORNEO ACTUAL
   // ============================================================
@@ -113,7 +337,6 @@ export class TournamentsService {
       select: {
         id: true,
         name: true,
-        maxPlayers: true,
         startsAt: true,
         registrationStartsAt: true,
         registrationEndsAt: true,
@@ -125,30 +348,29 @@ export class TournamentsService {
       return null;
     }
 
-    const registered = await this.prisma.tournamentParticipant.count({
-      where: { tournamentId: tournament.id },
-    });
-
-    const hasLimit = tournament.maxPlayers > 0;
+    const [registered, predictions] = await Promise.all([
+      this.prisma.tournamentParticipant.count({
+        where: { tournamentId: tournament.id },
+      }),
+      this.prisma.pollEntry.count({
+        where: { tournamentId: tournament.id },
+      }),
+    ]);
 
     const registrationOpen =
       now >= tournament.registrationStartsAt &&
       now < tournament.registrationEndsAt &&
-      now < tournament.startsAt &&
-      (!hasLimit || registered < tournament.maxPlayers);
+      now < tournament.startsAt;
 
     return {
       tournamentId: tournament.id,
       name: tournament.name,
       registered,
+      predictions,
       registrationStartsAt: tournament.registrationStartsAt,
       registrationEndsAt: tournament.registrationEndsAt,
       startsAt: tournament.startsAt,
       endsAt: tournament.endsAt,
-      maxPlayers: hasLimit ? tournament.maxPlayers : null,
-      available: hasLimit
-        ? Math.max(0, tournament.maxPlayers - registered)
-        : null,
       registrationOpen,
     };
   }
@@ -254,9 +476,6 @@ export class TournamentsService {
         registrationStartsAt: {
           lte: now,
         },
-        registrationEndsAt: {
-          gt: now,
-        },
         endsAt: {
           gte: now,
         },
@@ -277,7 +496,20 @@ export class TournamentsService {
 
     const { prize, ...publicTournament } = tournament;
 
-    return publicTournament;
+    const [participantsCount, predictionsCount] = await Promise.all([
+      this.prisma.tournamentParticipant.count({
+        where: { tournamentId: tournament.id },
+      }),
+      this.prisma.pollEntry.count({
+        where: { tournamentId: tournament.id },
+      }),
+    ]);
+
+    return {
+      ...publicTournament,
+      participantsCount,
+      predictionsCount,
+    };
   }
 
   // ============================================================
@@ -417,19 +649,6 @@ export class TournamentsService {
       );
     }
 
-    /*
-     * maxPlayers <= 0 significa
-     * participantes ilimitados.
-     */
-    if (
-      tournament.maxPlayers > 0 &&
-      tournament.participants.length >= tournament.maxPlayers
-    ) {
-      throw new BadRequestException(
-        "La Polla ya alcanzó el máximo de participantes.",
-      );
-    }
-
     return this.prisma.tournamentParticipant.create({
       data: {
         tournamentId,
@@ -484,6 +703,10 @@ export class TournamentsService {
       now <= tournament.registrationEndsAt;
 
 
+    const predictionsCount = await this.prisma.pollEntry.count({
+      where: { tournamentId },
+    });
+
     return {
       tournamentId: tournament.id,
       active: tournament.active,
@@ -499,10 +722,65 @@ export class TournamentsService {
       prize: tournament.prize,
       maxPlayers: tournament.maxPlayers,
       participantsCount: tournament.participants.length,
+      predictionsCount,
       isParticipant: !!participant,
       paid: participant?.paid ?? false,
     };
 
+  }
+
+  async getMyEntries(tournamentId: number, userId: number) {
+    const entries = await this.prisma.pollEntry.findMany({
+      where: {
+        tournamentId,
+        userId,
+      },
+      orderBy: { id: 'asc' },
+      include: {
+        predictions: {
+          select: {
+            matchId: true,
+            homeScore: true,
+            awayScore: true,
+            points: true,
+          },
+        },
+        payments: {
+          where: {
+            status: {
+              in: ['PENDING', 'APPROVED'],
+            },
+          },
+          orderBy: { id: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
+            amount: true,
+            reference: true,
+          },
+        },
+      },
+    });
+
+    return entries.map((entry, index) => ({
+      id: entry.id,
+      number: index + 1,
+      paid: entry.paid,
+      pending: !entry.paid,
+      predictionsSubmittedAt: entry.predictionsSubmittedAt,
+      payment: entry.payments[0] ?? null,
+      predictions: entry.predictions.map((prediction) => ({
+        matchId: prediction.matchId,
+        points: prediction.points,
+        selection:
+          prediction.homeScore > prediction.awayScore
+            ? 'HOME'
+            : prediction.homeScore < prediction.awayScore
+              ? 'AWAY'
+              : 'DRAW',
+      })),
+    }));
   }
 
   // ============================================================
@@ -581,49 +859,68 @@ export class TournamentsService {
 
   async getRanking(tournamentId: number) {
     const tournament = await this.prisma.tournament.findUnique({
-      where: {
-        id: tournamentId,
-      },
-      include: {
-        participants: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                predictions: {
-                  where: {
-                    tournamentId,
-                  },
-                  select: {
-                    points: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+      where: { id: tournamentId },
+      select: { id: true },
     });
 
     if (!tournament) {
       throw new NotFoundException("La Polla no existe.");
     }
 
-    const ranking = tournament.participants.map((participant) => {
-      const points = participant.user.predictions.reduce(
+    const entries = await this.prisma.pollEntry.findMany({
+      where: {
+        tournamentId,
+        paid: true,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        predictions: {
+          where: { tournamentId },
+          select: { points: true },
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    const slipsByUser = new Map<number, number>();
+
+    const ranking = entries.map((entry) => {
+      const slipNumber = (slipsByUser.get(entry.userId) ?? 0) + 1;
+      slipsByUser.set(entry.userId, slipNumber);
+
+      const points = entry.predictions.reduce(
         (sum, prediction) => sum + prediction.points,
         0,
       );
 
       return {
-        id: participant.user.id,
-        name: participant.user.name,
+        id: entry.id,
+        userId: entry.user.id,
+        entryId: entry.id,
+        slipNumber,
+        name: entry.user.name,
         points,
       };
     });
 
+    const repeatedUsers = new Set(
+      ranking
+        .filter((row) => (slipsByUser.get(row.userId) ?? 0) > 1)
+        .map((row) => row.userId),
+    );
+
     return ranking
+      .map((row) => ({
+        ...row,
+        name: repeatedUsers.has(row.userId)
+          ? `${row.name} · Pronóstico ${row.slipNumber}`
+          : row.name,
+      }))
       .sort((a, b) => {
         if (b.points !== a.points) {
           return b.points - a.points;
@@ -634,20 +931,29 @@ export class TournamentsService {
       .reduce<Array<{
         position: number;
         id: number;
+        userId: number;
+        entryId: number;
         name: string;
         points: number;
-      }>>((ranking, user) => {
-        const previous = ranking[ranking.length - 1];
+      }>>((rows, entry) => {
+        const previous = rows[rows.length - 1];
 
         const position =
-          previous && previous.points === user.points
+          previous && previous.points === entry.points
             ? previous.position
             : previous
               ? previous.position + 1
               : 1;
 
-        ranking.push({ position, ...user });
-        return ranking;
+        rows.push({
+          position,
+          id: entry.id,
+          userId: entry.userId,
+          entryId: entry.entryId,
+          name: entry.name,
+          points: entry.points,
+        });
+        return rows;
       }, []);
   }
 
@@ -820,15 +1126,19 @@ export class TournamentsService {
 
     return this.prisma.match.findMany({
       where: {
-        leagueId: tournament.leagueId,
-        matchday: {
-          season: tournament.season,
-        },
+        finished: false,
         date: {
           gt: new Date(),
         },
       },
       include: {
+        league: {
+          select: {
+            id: true,
+            name: true,
+            country: true,
+          },
+        },
         homeTeam: {
           select: {
             id: true,
@@ -879,16 +1189,12 @@ export class TournamentsService {
         id: {
           in: matchIds,
         },
-        leagueId: tournament.leagueId,
-        matchday: {
-          season: tournament.season,
-        },
       },
     });
 
     if (matches.length !== 10) {
       throw new BadRequestException(
-        "Uno o más partidos no pertenecen a la liga o temporada de la Polla.",
+        "Uno o más partidos ya no están disponibles.",
       );
     }
 
@@ -1055,7 +1361,414 @@ export class TournamentsService {
     }));
   }
 
-  async getPrizes(tournamentId: number) {
+  async getMyPrizes(userId: number) {
+    if (!Number.isSafeInteger(userId) || userId <= 0) {
+      throw new BadRequestException('Usuario inválido.');
+    }
+
+    const account = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    if (!account) {
+      throw new NotFoundException('Usuario no encontrado.');
+    }
+
+    if (account.role === 'ADMIN') {
+      return this.getAdminEarnings();
+    }
+
+    const closures = await this.prisma.tournamentPrizeClosure.findMany({
+      orderBy: { closedAt: 'desc' },
+      select: {
+        closedAt: true,
+        winners: true,
+        tournament: {
+          select: {
+            id: true,
+            name: true,
+            season: true,
+          },
+        },
+      },
+    });
+
+    const history: Array<{
+      tournamentId: number;
+      tournamentName: string;
+      season: number;
+      closedAt: Date | null;
+      position: number;
+      points: number;
+      amountCOP: number;
+      provisional: boolean;
+      entryId: number | null;
+      paid: boolean;
+    }> = [];
+
+    const payouts = await this.prisma.prizePayout.findMany({
+      where: { userId },
+      select: {
+        tournamentId: true,
+        entryId: true,
+        amountCOP: true,
+      },
+    });
+
+    const prizeWasPaid = (
+      tournamentId: number,
+      entryId: number | null,
+      amountCOP: number,
+    ) => payouts.some((payout) =>
+      payout.tournamentId === tournamentId &&
+      (
+        (entryId !== null && payout.entryId === entryId) ||
+        (entryId === null && payout.entryId === null && payout.amountCOP === amountCOP)
+      ),
+    );
+
+    for (const closure of closures) {
+      if (!Array.isArray(closure.winners)) continue;
+
+      for (const item of closure.winners) {
+        if (
+          item === null ||
+          typeof item !== 'object' ||
+          Array.isArray(item)
+        ) {
+          continue;
+        }
+
+        const winner = item as {
+          userId?: number;
+          entryId?: number | null;
+          position?: number;
+          rank?: number;
+          points?: number;
+          amountCOP?: number;
+        };
+
+        if (winner.userId !== userId) continue;
+
+        const position = winner.position ?? winner.rank;
+        if (
+          !Number.isSafeInteger(position) ||
+          !Number.isSafeInteger(winner.points) ||
+          !Number.isSafeInteger(winner.amountCOP) ||
+          (winner.amountCOP ?? 0) < 0
+        ) {
+          continue;
+        }
+
+        history.push({
+          tournamentId: closure.tournament.id,
+          tournamentName: closure.tournament.name,
+          season: closure.tournament.season,
+          closedAt: closure.closedAt,
+          position: position as number,
+          points: winner.points as number,
+          amountCOP: winner.amountCOP as number,
+          provisional: false,
+          entryId: typeof winner.entryId === 'number' ? winner.entryId : null,
+          paid: prizeWasPaid(
+            closure.tournament.id,
+            typeof winner.entryId === 'number' ? winner.entryId : null,
+            winner.amountCOP as number,
+          ),
+        });
+      }
+    }
+
+    const creditedTournamentIds = new Set(
+      history.map((prize) => prize.tournamentId),
+    );
+
+    const openTournaments = await this.prisma.tournament.findMany({
+      where: {
+        active: true,
+        registrationEndsAt: { lte: new Date() },
+        prizeClosure: { is: null },
+        ...(creditedTournamentIds.size > 0
+          ? { id: { notIn: [...creditedTournamentIds] } }
+          : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        season: true,
+      },
+    });
+
+    for (const tournament of openTournaments) {
+      const calculated = await this.getPrizes(tournament.id, 'admin');
+      const winners = Array.isArray(calculated.winners)
+        ? calculated.winners
+        : [];
+
+      for (const item of winners) {
+        if (
+          item === null ||
+          typeof item !== 'object' ||
+          Array.isArray(item)
+        ) {
+          continue;
+        }
+
+        const winner = item as {
+          userId?: number;
+          entryId?: number | null;
+          position?: number;
+          points?: number;
+          amountCOP?: number;
+        };
+
+        const position = winner.position;
+        const points = winner.points;
+        const amountCOP = winner.amountCOP;
+
+        if (
+          winner.userId !== userId ||
+          typeof position !== "number" ||
+          typeof points !== "number" ||
+          typeof amountCOP !== "number" ||
+          !Number.isSafeInteger(position) ||
+          !Number.isSafeInteger(points) ||
+          !Number.isSafeInteger(amountCOP) ||
+          amountCOP < 0
+        ) {
+          continue;
+        }
+
+        const entryId = typeof winner.entryId === 'number' ? winner.entryId : null;
+
+        history.push({
+          tournamentId: tournament.id,
+          tournamentName: tournament.name,
+          season: tournament.season,
+          closedAt: null,
+          position,
+          points,
+          amountCOP,
+          provisional: true,
+          entryId,
+          paid: prizeWasPaid(tournament.id, entryId, amountCOP),
+        });
+      }
+    }
+
+    return {
+      currency: 'COP' as const,
+      balanceKind: 'winnings' as const,
+      balanceCOP: history.reduce(
+        (sum, prize) => sum + (prize.paid ? 0 : prize.amountCOP),
+        0,
+      ),
+      history,
+    };
+  }
+
+  private async getAdminEarnings() {
+    const history: Array<{
+      tournamentId: number;
+      tournamentName: string;
+      season: number;
+      closedAt: Date | null;
+      position: number;
+      points: number;
+      amountCOP: number;
+      provisional: boolean;
+      concept: 'ganancia';
+    }> = [];
+
+    const closures = await this.prisma.tournamentPrizeClosure.findMany({
+      orderBy: { closedAt: 'desc' },
+      select: {
+        closedAt: true,
+        profitCOP: true,
+        tournament: {
+          select: { id: true, name: true, season: true },
+        },
+      },
+    });
+
+    for (const closure of closures) {
+      if (
+        !Number.isSafeInteger(closure.profitCOP) ||
+        closure.profitCOP < 0
+      ) {
+        continue;
+      }
+
+      history.push({
+        tournamentId: closure.tournament.id,
+        tournamentName: closure.tournament.name,
+        season: closure.tournament.season,
+        closedAt: closure.closedAt,
+        position: 0,
+        points: 0,
+        amountCOP: closure.profitCOP,
+        provisional: false,
+        concept: 'ganancia',
+      });
+    }
+
+    const closedIds = new Set(history.map((item) => item.tournamentId));
+    const openTournaments = await this.prisma.tournament.findMany({
+      where: {
+        active: true,
+        registrationEndsAt: { lte: new Date() },
+        prizeClosure: { is: null },
+        ...(closedIds.size > 0 ? { id: { notIn: [...closedIds] } } : {}),
+      },
+      select: { id: true, name: true, season: true },
+    });
+
+    for (const tournament of openTournaments) {
+      try {
+        const calculated = await this.getPrizes(tournament.id, 'admin');
+        const profitCOP = calculated.profitCOP;
+
+        if (typeof profitCOP !== 'number' || !Number.isSafeInteger(profitCOP) || profitCOP < 0) {
+          continue;
+        }
+
+        history.push({
+          tournamentId: tournament.id,
+          tournamentName: tournament.name,
+          season: tournament.season,
+          closedAt: null,
+          position: 0,
+          points: 0,
+          amountCOP: profitCOP,
+          provisional: true,
+          concept: 'ganancia',
+        });
+      } catch {
+        continue;
+      }
+    }
+
+    return {
+      currency: 'COP' as const,
+      balanceKind: 'profit' as const,
+      balanceCOP: history.reduce((sum, item) => sum + item.amountCOP, 0),
+      history,
+    };
+  }
+
+  async markWinnerPaid(
+    tournamentId: number,
+    entryId: number,
+    adminId: number,
+  ) {
+    if (
+      !Number.isSafeInteger(tournamentId) ||
+      tournamentId <= 0 ||
+      !Number.isSafeInteger(entryId) ||
+      entryId <= 0 ||
+      !Number.isSafeInteger(adminId) ||
+      adminId <= 0
+    ) {
+      throw new BadRequestException('Los datos del pago no son válidos.');
+    }
+
+    const prizes = await this.getPrizes(tournamentId, 'admin');
+    const winners = Array.isArray(prizes.winners) ? prizes.winners : [];
+    const winner = winners.find((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return false;
+      }
+      return (item as { entryId?: number }).entryId === entryId;
+    }) as { userId?: number; amountCOP?: number; entryId?: number } | undefined;
+
+    const userId = winner?.userId;
+    const amountCOP = winner?.amountCOP;
+
+    if (
+      !winner ||
+      typeof userId !== 'number' ||
+      typeof amountCOP !== 'number' ||
+      !Number.isSafeInteger(userId) ||
+      !Number.isSafeInteger(amountCOP) ||
+      amountCOP < 0
+    ) {
+      throw new BadRequestException(
+        'Ese pronóstico no tiene un premio para pagar.',
+      );
+    }
+
+    const existing = await this.prisma.prizePayout.findFirst({
+      where: { tournamentId, entryId },
+    });
+
+    if (existing) {
+      return {
+        paid: true,
+        alreadyPaid: true,
+        entryId,
+        amountCOP: existing.amountCOP,
+      };
+    }
+
+    const saved = await this.prisma.prizePayout.create({
+      data: {
+        tournamentId,
+        entryId,
+        userId,
+        amountCOP,
+        adminId,
+      },
+    });
+
+    return {
+      paid: true,
+      alreadyPaid: false,
+      entryId: saved.entryId,
+      amountCOP: saved.amountCOP,
+      paidAt: saved.paidAt,
+    };
+  }
+
+  private async annotateWinnerPayouts(
+    tournamentId: number,
+    winners: unknown,
+  ) {
+    if (!Array.isArray(winners)) return winners;
+
+    const payouts = await this.prisma.prizePayout.findMany({
+      where: { tournamentId },
+      select: { entryId: true, userId: true, amountCOP: true },
+    });
+
+    return winners.map((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return item;
+      }
+
+      const winner = item as {
+        entryId?: number | null;
+        userId?: number;
+        amountCOP?: number;
+      };
+      const paid = payouts.some((payout) =>
+        (typeof winner.entryId === 'number' && payout.entryId === winner.entryId) ||
+        (
+          winner.entryId == null &&
+          payout.entryId == null &&
+          payout.userId === winner.userId &&
+          payout.amountCOP === winner.amountCOP
+        ),
+      );
+
+      return { ...winner, paid };
+    });
+  }
+
+  async getPrizes(
+    tournamentId: number,
+    audience: 'public' | 'admin' = 'public',
+  ) {
     const closure = await this.prisma.tournamentPrizeClosure.findUnique({
       where: { tournamentId },
     });
@@ -1080,7 +1793,9 @@ export class TournamentsService {
           second: closure.secondCOP,
           third: closure.thirdCOP,
         },
-        winners: closure.winners,
+        winners: audience === 'admin'
+          ? await this.annotateWinnerPayouts(tournamentId, closure.winners)
+          : closure.winners,
         allocatedCOP: closure.allocatedCOP,
         undistributedCOP: closure.undistributedCOP,
       };
@@ -1127,17 +1842,19 @@ export class TournamentsService {
       },
       select: {
         userId: true,
+        entryId: true,
         amount: true,
       },
     });
 
-    // Un solo pago aprobado por jugador.
-    const paidUserIds = new Set<number>();
+    const paidKeys = new Set<number>();
     let revenueCOP = 0;
 
     for (const payment of payments) {
+      const slipKey = payment.entryId ?? payment.userId;
+
       if (
-        paidUserIds.has(payment.userId) ||
+        paidKeys.has(slipKey) ||
         !Number.isSafeInteger(payment.amount) ||
         payment.amount <= 0
       ) {
@@ -1146,7 +1863,7 @@ export class TournamentsService {
         );
       }
 
-      paidUserIds.add(payment.userId);
+      paidKeys.add(slipKey);
       revenueCOP += payment.amount;
     }
 
@@ -1161,14 +1878,15 @@ export class TournamentsService {
     const ranking = await this.getRanking(tournamentId);
 
     const eligible = ranking
-      .filter((player) => paidUserIds.has(player.id))
+      .filter((player) => paidKeys.has(player.entryId ?? player.id))
       .map((player) => ({
-        userId: player.id,
+        userId: player.userId ?? player.id,
+        entryId: player.entryId,
         points: player.points,
         name: player.name,
       }));
 
-    if (eligible.length !== paidUserIds.size) {
+    if (eligible.length !== paidKeys.size) {
       throw new BadRequestException(
         'Hay pagos aprobados sin participante válido.',
       );
@@ -1201,7 +1919,7 @@ export class TournamentsService {
     // Evitar publicar ganadores con pagos históricos
     // que no cubren la inscripción actual del torneo.
     const paymentsReady =
-      paidUserIds.size > 0 &&
+      paidKeys.size > 0 &&
       payments.every(
         (payment) => payment.amount === tournament.inscription,
       );
@@ -1212,23 +1930,31 @@ export class TournamentsService {
       matchesReady,
       paymentsReady,
     });
+    const showEachWinner =
+      audience === 'admin'
+        ? matchesReady && paymentsReady
+        : winnersReady;
 
     const distribution = calculatePrizeDistribution(
       revenueCOP,
-      winnersReady
-        ? eligible.map(({ userId, points }) => ({
+      showEachWinner
+        ? eligible.map(({ userId, entryId, points }) => ({
             userId,
+            ...(entryId != null ? { entryId } : {}),
             points,
           }))
         : [],
     );
 
-    const winners = winnersReady
+    const winners = showEachWinner
       ? distribution.winners.map((winner) => ({
           ...winner,
           name:
-            eligible.find((p) => p.userId === winner.userId)
-              ?.name ?? '',
+            eligible.find((player) =>
+              winner.entryId != null
+                ? player.entryId === winner.entryId
+                : player.userId === winner.userId,
+            )?.name ?? '',
         }))
       : null;
 
@@ -1249,7 +1975,9 @@ export class TournamentsService {
         second: distribution.secondCOP,
         third: distribution.thirdCOP,
       },
-      winners,
+      winners: audience === 'admin'
+        ? await this.annotateWinnerPayouts(tournamentId, winners)
+        : winners,
       allocatedCOP: winnersReady
         ? distribution.allocatedCOP
         : null,

@@ -9,6 +9,7 @@ import {
 } from '@/lib/tournaments';
 
 import { ApiMatch } from '@/types/match';
+import { teamNameEs } from '@/lib/team-name';
 
 interface TournamentMatchSelectorProps {
   tournamentId: number;
@@ -673,7 +674,7 @@ export default function TournamentMatchSelector({
                             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
 
                               <span className="font-bold text-white">
-                                {match.homeTeam.name}
+                                {teamNameEs(match.homeTeam.name)}
                               </span>
 
                               <span className="text-sm font-semibold text-red-400">
@@ -681,7 +682,7 @@ export default function TournamentMatchSelector({
                               </span>
 
                               <span className="font-bold text-white">
-                                {match.awayTeam.name}
+                                {teamNameEs(match.awayTeam.name)}
                               </span>
 
                             </div>
@@ -713,6 +714,12 @@ export default function TournamentMatchSelector({
                                   },
                                 )}
                               </span>
+
+                              {match.league?.name && (
+                                <span className="rounded-full bg-white/5 px-2 py-1 text-xs">
+                                  {match.league.name}
+                                </span>
+                              )}
 
                               {match.matchday?.roundName && (
 

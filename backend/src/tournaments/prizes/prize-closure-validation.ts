@@ -8,6 +8,7 @@ export interface ClosureMatch {
 export interface ClosurePayment {
   userId: number;
   participantId: number | null;
+  entryId?: number | null;
   amount: number;
   currency: string;
 }
@@ -79,20 +80,40 @@ export function validatePrizeClosure(
   );
 
   const userIds = new Set<number>();
+  const slipKeys = new Set<string>();
   const participantIds = new Set<number>();
 
   let revenueCOP = 0;
 
   for (const payment of input.payments) {
-    if (
+    const entryId = payment.entryId;
+    const hasEntry =
+      entryId !== undefined && entryId !== null;
+
+    if (hasEntry) {
+      if (
+        !Number.isSafeInteger(payment.userId) ||
+        payment.userId <= 0 ||
+        !Number.isSafeInteger(entryId) ||
+        entryId <= 0 ||
+        slipKeys.has(`entry:${entryId}`)
+      ) {
+        errors.push('Existen pagos aprobados duplicados o inválidos.');
+      }
+
+      slipKeys.add(`entry:${entryId}`);
+      userIds.add(payment.userId);
+    } else if (
       !Number.isSafeInteger(payment.userId) ||
       payment.userId <= 0 ||
       userIds.has(payment.userId)
     ) {
       errors.push('Existen pagos aprobados duplicados o inválidos.');
+      userIds.add(payment.userId);
+    } else {
+      userIds.add(payment.userId);
+      slipKeys.add(`user:${payment.userId}`);
     }
-
-    userIds.add(payment.userId);
 
     if (
       payment.currency !== 'COP' ||
@@ -102,7 +123,23 @@ export function validatePrizeClosure(
       errors.push('Existe un pago aprobado con importe incorrecto.');
     }
 
-    if (
+    if (hasEntry) {
+      if (payment.participantId === null) {
+        errors.push('Existe un participante de pago inválido o duplicado.');
+      } else {
+        const participant = participantById.get(payment.participantId);
+
+        if (
+          !participant ||
+          participant.userId !== payment.userId ||
+          !participant.paid
+        ) {
+          errors.push(
+            'El pago no corresponde a un participante pagado válido.',
+          );
+        }
+      }
+    } else if (
       payment.participantId === null ||
       participantIds.has(payment.participantId)
     ) {
@@ -133,7 +170,7 @@ export function validatePrizeClosure(
   return {
     ready: errors.length === 0,
     errors: [...new Set(errors)],
-    paidPlayers: userIds.size,
+    paidPlayers: slipKeys.size,
     revenueCOP,
   };
 }

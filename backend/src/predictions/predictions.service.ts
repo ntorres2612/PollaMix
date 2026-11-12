@@ -129,12 +129,6 @@ export class PredictionsService {
             },
           });
 
-        if (participant.predictionsSubmittedAt) {
-          throw new BadRequestException(
-            'Ya confirmaste tus 10 pronósticos. No puedes modificarlos.',
-          );
-        }
-
         const tournament =
           await tx.tournament.findUnique({
             where: { id: tournamentId },
@@ -155,29 +149,6 @@ export class PredictionsService {
         ) {
           throw new BadRequestException(
             'El plazo para enviar pronósticos está cerrado.',
-          );
-        }
-
-        if (!participant.paid) {
-          throw new ForbiddenException(
-            'Tu inscripción todavía no tiene el pago aprobado.',
-          );
-        }
-
-        const approvedPayment =
-          await tx.payment.findFirst({
-            where: {
-              tournamentId,
-              userId,
-              participantId: participant.id,
-              status: 'APPROVED',
-            },
-            select: { id: true },
-          });
-
-        if (!approvedPayment) {
-          throw new ForbiddenException(
-            'No se encontró un pago aprobado para esta inscripción.',
           );
         }
 
@@ -209,25 +180,21 @@ export class PredictionsService {
           );
         }
 
-        const existingPredictions =
-          await tx.prediction.count({
-            where: {
-              tournamentId,
-              userId,
-            },
-          });
-
-        if (existingPredictions > 0) {
-          throw new BadRequestException(
-            'Ya existen pronósticos registrados. No se permite un envío duplicado.',
-          );
-        }
+        const entry = await tx.pollEntry.create({
+          data: {
+            tournamentId,
+            userId,
+            participantId: participant.id,
+            paid: false,
+          },
+        });
 
         const result = await tx.prediction.createMany({
           data: dto.predictions.map((prediction) => ({
             tournamentId,
             userId,
             matchId: prediction.matchId,
+            entryId: entry.id,
             ...selections[prediction.selection],
           })),
         });
@@ -238,20 +205,15 @@ export class PredictionsService {
           );
         }
 
-        await tx.tournamentParticipant.update({
-          where: { id: participant.id },
-          data: {
-            predictionsSubmittedAt: now,
-          },
-        });
-
         return {
           success: true,
+          pending: true,
           tournamentId,
+          entryId: entry.id,
           submitted: result.count,
-          submittedAt: now,
+          submittedAt: null,
           message:
-            'Tus 10 pronósticos quedaron confirmados definitivamente.',
+            'Tus pronósticos quedaron guardados en estado pendiente. Envía el comprobante de pago.',
         };
       },
       {
@@ -333,20 +295,6 @@ export class PredictionsService {
       );
     }
 
-    // 3. Verificar liga
-    if (match.leagueId !== tournament.leagueId) {
-      throw new BadRequestException(
-        'El partido no pertenece a la liga del torneo.',
-      );
-    }
-
-    // 4. Verificar temporada
-    if (match.matchday.season !== tournament.season) {
-      throw new BadRequestException(
-        'El partido no pertenece a la temporada del torneo.',
-      );
-    }
-
     const selectedMatch =
       await tx.tournamentMatch.findUnique({
         where: {
@@ -382,7 +330,7 @@ export class PredictionsService {
     // 6. Verificar pago
     if (!participant.paid) {
       throw new BadRequestException(
-        'El usuario no tiene el pago aprobado.',
+        'Tu inscripción todavía no tiene el pago aprobado.',
       );
     }
 
@@ -393,12 +341,6 @@ export class PredictionsService {
       );
     }
 
-    // 8. Torneo iniciado
-    if (new Date() < tournament.startsAt) {
-      throw new BadRequestException(
-        'El torneo todavía no ha comenzado.',
-      );
-    }
     // 8. Torneo no terminado
     if (
       tournament.endsAt &&
@@ -424,13 +366,11 @@ export class PredictionsService {
 
     // 10. Evitar duplicado
     const existing =
-      await tx.prediction.findUnique({
+      await tx.prediction.findFirst({
         where: {
-          userId_matchId_tournamentId: {
-            userId,
-            matchId: dto.matchId,
-            tournamentId: dto.tournamentId,
-          },
+          userId,
+          matchId: dto.matchId,
+          tournamentId: dto.tournamentId,
         },
       });
 
@@ -440,12 +380,21 @@ export class PredictionsService {
       );
     }
 
-    // 11. Crear
+    const entry = await tx.pollEntry.create({
+      data: {
+        tournamentId: dto.tournamentId,
+        userId,
+        participantId: participant.id,
+        paid: false,
+      },
+    });
+
     return tx.prediction.create({
       data: {
         userId,
         matchId: dto.matchId,
         tournamentId: dto.tournamentId,
+        entryId: entry.id,
         homeScore: dto.homeScore,
         awayScore: dto.awayScore,
       },

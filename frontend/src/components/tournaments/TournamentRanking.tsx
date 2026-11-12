@@ -87,7 +87,7 @@ export default function TournamentRanking({
         <div className="divide-y divide-white/5">
           {ranking.map((player) => {
             const isCurrentUser =
-              currentUserId === player.id;
+              currentUserId === (player.userId ?? player.id);
 
             return (
               <div

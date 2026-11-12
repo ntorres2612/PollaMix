@@ -8,10 +8,12 @@ import Footer from "@/components/layout/Footer";
 
 import { getCurrentUser } from "@/lib/auth";
 import {
-  getCurrentPlayerTournament,
   getCurrentTournament,
+  getSelectedTournamentMatches,
   getTournamentMyStatus,
 } from "@/lib/tournaments";
+import { ApiMatch } from "@/types/match";
+import { teamNameEs } from "@/lib/team-name";
 
 interface Tournament {
   id: number;
@@ -43,6 +45,7 @@ export default function JornadasPage() {
 
   const [status, setStatus] =
     useState<TournamentStatus | null>(null);
+  const [matches, setMatches] = useState<ApiMatch[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -64,29 +67,45 @@ export default function JornadasPage() {
         setError("");
 
         const currentUser = getCurrentUser();
-
-        const currentTournament = currentUser
-          ? await getCurrentPlayerTournament()
-          : await getCurrentTournament();
+        const currentTournament = await getCurrentTournament();
 
         if (cancelled) return;
 
         if (!currentTournament) {
           setTournament(null);
           setStatus(null);
+          setMatches([]);
           return;
         }
 
         setTournament(currentTournament);
 
+        const selectedMatches = await getSelectedTournamentMatches(
+          currentTournament.id,
+        );
+
+        if (cancelled) return;
+        setMatches(selectedMatches);
+
         if (currentUser) {
-          const tournamentStatus =
-            await getTournamentMyStatus(
+          try {
+            const tournamentStatus = await getTournamentMyStatus(
               currentTournament.id,
             );
 
-          if (!cancelled) {
-            setStatus(tournamentStatus);
+            if (!cancelled) {
+              setStatus(tournamentStatus);
+            }
+          } catch (statusError) {
+            if (cancelled) return;
+            const message =
+              statusError instanceof Error
+                ? statusError.message
+                : "";
+            if (message !== "Unauthorized") {
+              throw statusError;
+            }
+            setStatus(null);
           }
         } else {
           setStatus(null);
@@ -133,8 +152,7 @@ export default function JornadasPage() {
           </h1>
 
           <p className="mt-3 max-w-2xl text-slate-400">
-            Consulta la Polla activa y accede al espacio
-            de pronósticos para registrar tus marcadores.
+            Consulta la Polla activa y elige Local, Empate o Visitante.
           </p>
         </section>
 
@@ -226,6 +244,13 @@ export default function JornadasPage() {
                       Debes completar la inscripción antes
                       de registrar tus pronósticos.
                     </p>
+
+                    <Link
+                      href="/pago"
+                      className="mt-5 inline-flex rounded-xl bg-red-600 px-6 py-3 font-bold text-white transition hover:bg-red-500"
+                    >
+                      Inscribirme
+                    </Link>
                   </>
                 )}
 
@@ -233,21 +258,30 @@ export default function JornadasPage() {
                   status?.isParticipant &&
                   !status?.paid && (
                     <>
-                      <h3 className="text-lg font-bold">
-                        Tu pago está pendiente de aprobación
-                      </h3>
+                    <h3 className="text-lg font-bold">
+                      Puedes armar tus pronósticos
+                    </h3>
 
-                      <p className="mt-2 text-slate-400">
-                        Podrás acceder a los pronósticos
-                        cuando tu pago haya sido aprobado.
-                      </p>
+                    <p className="mt-2 text-slate-400">
+                      Elige Local, Empate o Visitante. Al guardar
+                      verificamos el pago para que puedas
+                      participar.
+                    </p>
 
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <Link
+                        href="/pronosticos"
+                        className="inline-flex rounded-xl bg-red-600 px-6 py-3 font-bold text-white transition hover:bg-red-500"
+                      >
+                        Ir a mis pronósticos
+                      </Link>
                       <Link
                         href="/pago"
-                        className="mt-5 inline-flex rounded-xl border border-white/15 px-6 py-3 font-bold text-white transition hover:bg-white/5"
+                        className="inline-flex rounded-xl border border-white/15 px-6 py-3 font-bold text-white transition hover:bg-white/5"
                       >
                         Consultar pago
                       </Link>
+                    </div>
                     </>
                   )}
 
@@ -259,9 +293,9 @@ export default function JornadasPage() {
 
                     <p className="mt-2 text-slate-400">
                       Consulta los partidos seleccionados
-                      por el administrador, registra tus
-                      marcadores y revisa tu progreso desde
-                      un solo lugar.
+                      por el administrador, elige Local,
+                      Empate o Visitante y revisa tu progreso
+                      desde un solo lugar.
                     </p>
 
                     <Link
@@ -272,6 +306,43 @@ export default function JornadasPage() {
                       <span aria-hidden="true">→</span>
                     </Link>
                   </>
+                )}
+              </div>
+
+              <div className="mt-8 border-t border-white/10 pt-6">
+                <h3 className="text-lg font-bold">
+                  Partidos de esta Polla
+                </h3>
+                {matches.length === 0 ? (
+                  <p className="mt-3 text-slate-400">
+                    El administrador todavía no publica los partidos.
+                  </p>
+                ) : (
+                  <ul className="mt-4 divide-y divide-white/10">
+                    {matches.map((match) => (
+                      <li
+                        key={match.id}
+                        className="flex flex-col gap-1 py-4 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <span className="font-bold">
+                          {teamNameEs(match.homeTeam.name)} vs {teamNameEs(match.awayTeam.name)}
+                        </span>
+                        <span className="text-sm text-slate-400">
+                          {match.finished && match.homeScore !== null && match.awayScore !== null
+                            ? `Final ${match.homeScore} - ${match.awayScore}`
+                            : `${match.matchday?.tournament || match.league?.name
+                                ? `${match.matchday?.tournament || match.league?.name} · `
+                                : ""}${new Date(match.date).toLocaleString("es-CO", {
+                                weekday: "short",
+                                day: "2-digit",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}`}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             </div>

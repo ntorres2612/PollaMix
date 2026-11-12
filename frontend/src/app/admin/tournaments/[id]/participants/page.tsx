@@ -17,6 +17,7 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 
 import {
+  buildAdminSlips,
   getTournament,
   getTournamentPayments,
   updatePaymentStatus,
@@ -321,59 +322,16 @@ export default function TournamentParticipantsPage() {
     tournament?.participants ??
     [];
 
-  const paidCount =
-    useMemo(
-      () =>
-        participants.filter(
-          (
-            participant,
-          ) =>
-            participant.paid,
-        ).length,
+  const slips = useMemo(
+    () => buildAdminSlips(participants, payments),
+    [participants, payments],
+  );
 
-      [
-        participants,
-      ],
-    );
+  const paidCount = slips.filter((slip) => slip.paid).length;
 
-  const pendingCount =
-    participants.length -
-    paidCount;
-
-  const isUnlimited =
-    !tournament ||
-    tournament.maxPlayers <=
-      0;
-
-  const availablePlaces =
-    tournament &&
-    !isUnlimited
-      ? Math.max(
-          tournament.maxPlayers -
-            participants.length,
-          0,
-        )
-      : null;
-
-  const getParticipantPayment =
-    useCallback(
-      (
-        participantId: number,
-      ) => {
-
-        return payments.find(
-          (
-            payment,
-          ) =>
-            payment.participantId ===
-            participantId,
-        );
-
-      },
-      [
-        payments,
-      ],
-    );
+  const pendingCount = slips.filter(
+    (slip) => slip.payment?.status === "PENDING",
+  ).length;
 
   async function handlePaymentAction(
     paymentId: number,
@@ -627,9 +585,10 @@ export default function TournamentParticipantsPage() {
               </p>
 
               <p className="mt-2 font-bold text-white">
-                {formatCurrency(
-                  tournament.prize,
-                )}
+                Según inscritos
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                67,81% · 70% / 20% / 10%
               </p>
 
             </div>
@@ -661,7 +620,7 @@ export default function TournamentParticipantsPage() {
 
         {/* Estadísticas */}
 
-        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
           <article className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
 
@@ -674,9 +633,7 @@ export default function TournamentParticipantsPage() {
             </p>
 
             <p className="mt-1 text-sm text-slate-400">
-              {isUnlimited
-                ? "de ilimitados"
-                : `de ${tournament.maxPlayers}`}
+              personas inscritas
             </p>
 
           </article>
@@ -710,36 +667,6 @@ export default function TournamentParticipantsPage() {
             <p className="mt-1 text-sm text-slate-400">
               requieren revisión
             </p>
-
-          </article>
-
-          <article className="rounded-2xl border border-blue-500/20 bg-blue-950/20 p-5">
-
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">
-              Cupos disponibles
-            </p>
-
-            {isUnlimited ? (
-              <>
-                <p className="mt-2 text-4xl font-black text-white">
-                  ∞
-                </p>
-
-                <p className="mt-1 text-sm text-slate-400">
-                  participantes sin límite
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="mt-2 text-3xl font-black text-white">
-                  {availablePlaces}
-                </p>
-
-                <p className="mt-1 text-sm text-slate-400">
-                  lugares restantes
-                </p>
-              </>
-            )}
 
           </article>
 
@@ -777,7 +704,7 @@ export default function TournamentParticipantsPage() {
             </h2>
 
             <p className="mt-1 text-sm text-slate-400">
-              Jugadores inscritos y estado de sus pagos.
+              Cada pronóstico del mismo jugador aparece con su propio pago.
             </p>
 
           </div>
@@ -839,27 +766,31 @@ export default function TournamentParticipantsPage() {
 
                   <tbody className="divide-y divide-white/5">
 
-                    {participants.map(
+                    {slips.map(
                       (
-                        participant,
+                        slip,
                         index,
                       ) => {
 
-                        const payment =
-                          getParticipantPayment(
-                            participant.id,
-                          );
+                        const payment = slip.payment ?? undefined;
+
+                        const participant = {
+                          id: slip.participantId,
+                          paid: slip.paid,
+                          user: {
+                            id: slip.userId,
+                            name: slip.name,
+                            email: slip.email,
+                          },
+                        };
 
                         const canManage =
-                          !participant.paid &&
                           payment?.status ===
                             "PENDING";
 
                         return (
                           <tr
-                            key={
-                              participant.id
-                            }
+                            key={slip.key}
                             className="transition hover:bg-white/[0.03]"
                           >
 
@@ -1065,27 +996,31 @@ export default function TournamentParticipantsPage() {
 
               <div className="divide-y divide-white/5 md:hidden">
 
-                {participants.map(
+                {slips.map(
                   (
-                    participant,
+                    slip,
                     index,
                   ) => {
 
-                    const payment =
-                      getParticipantPayment(
-                        participant.id,
-                      );
+                    const payment = slip.payment ?? undefined;
+
+                    const participant = {
+                      id: slip.participantId,
+                      paid: slip.paid,
+                      user: {
+                        id: slip.userId,
+                        name: slip.name,
+                        email: slip.email,
+                      },
+                    };
 
                     const canManage =
-                      !participant.paid &&
                       payment?.status ===
                         "PENDING";
 
                     return (
                       <article
-                        key={
-                          participant.id
-                        }
+                        key={slip.key}
                         className="p-5"
                       >
 

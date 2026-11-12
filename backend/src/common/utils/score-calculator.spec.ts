@@ -1,6 +1,6 @@
 import { calculateScore } from './score-calculator';
 
-describe('PollaMix - cálculo de puntuación', () => {
+describe('GolPro - cálculo de puntuación', () => {
   it('asigna 1 punto cuando gana el local', () => {
     expect(calculateScore(1, 0, 3, 1)).toBe(1);
   });

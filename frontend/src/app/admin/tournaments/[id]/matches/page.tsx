@@ -48,6 +48,14 @@ export default function TournamentMatchesAdminPage() {
     <main className="min-h-screen bg-slate-950 py-10 text-white">
       <Container>
         <div className="mx-auto max-w-5xl">
+          <button
+            type="button"
+            onClick={() => router.push('/admin/tournaments')}
+            className="mb-8 text-sm font-semibold text-slate-400 transition hover:text-white"
+          >
+            ← Volver a mis Pollas
+          </button>
+
           <div className="mb-8">
             <p className="text-sm font-medium uppercase tracking-wider text-red-400">
               Administración

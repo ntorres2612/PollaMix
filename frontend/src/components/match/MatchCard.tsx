@@ -5,6 +5,7 @@ import TeamLogo from "./TeamLogo";
 
 import { ApiMatch } from "@/types/match";
 import type { PredictionSelection } from "@/lib/predictions";
+import { teamNameEs } from "@/lib/team-name";
 import MatchSelector from "./MatchSelector";
 
 interface MatchCardProps {
@@ -70,12 +71,12 @@ export default function MatchCard({
         <div className="flex items-center gap-4">
           <TeamLogo
             src={match.homeTeam.logo}
-            name={match.homeTeam.name}
+            name={teamNameEs(match.homeTeam.name)}
           />
 
           <div>
             <h3 className="text-xl font-bold">
-              {match.homeTeam.name}
+              {teamNameEs(match.homeTeam.name)}
             </h3>
 
             <p className="text-sm text-slate-400">
@@ -117,7 +118,7 @@ export default function MatchCard({
         <div className="flex items-center justify-end gap-4">
           <div className="text-right">
             <h3 className="text-xl font-bold">
-              {match.awayTeam.name}
+              {teamNameEs(match.awayTeam.name)}
             </h3>
 
             <p className="text-sm text-slate-400">
@@ -127,7 +128,7 @@ export default function MatchCard({
 
           <TeamLogo
             src={match.awayTeam.logo}
-            name={match.awayTeam.name}
+            name={teamNameEs(match.awayTeam.name)}
           />
         </div>
       </div>

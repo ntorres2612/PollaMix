@@ -69,10 +69,28 @@ export class PaymentsService {
         );
       }
 
+      const entry = dto.entryId
+        ? await tx.pollEntry.findFirst({
+            where: {
+              id: dto.entryId,
+              tournamentId: dto.tournamentId,
+              userId,
+              participantId: participant.id,
+            },
+          })
+        : null;
+
+      if (dto.entryId && !entry) {
+        throw new BadRequestException(
+          'El pronóstico que vas a pagar no existe.',
+        );
+      }
+
       const existingPayment = await tx.payment.findFirst({
         where: {
           tournamentId: dto.tournamentId,
           userId,
+          ...(entry ? { entryId: entry.id } : {}),
           status: {
             in: ['PENDING', 'APPROVED'],
           },
@@ -82,14 +100,23 @@ export class PaymentsService {
         },
       });
 
-      if (existingPayment) {
-        // Una segunda solicitud no debe crear otro pago.
+      if (existingPayment && !entry) {
         return existingPayment;
       }
 
-      if (participant.paid) {
+      if (existingPayment && entry) {
+        return existingPayment;
+      }
+
+      if (!entry && participant.paid) {
         throw new BadRequestException(
           'Esta participación ya está marcada como pagada.',
+        );
+      }
+
+      if (entry?.paid) {
+        throw new BadRequestException(
+          'Este pronóstico ya está pagado.',
         );
       }
 
@@ -103,6 +130,7 @@ export class PaymentsService {
           userId,
           tournamentId: dto.tournamentId,
           participantId: participant.id,
+          ...(entry ? { entryId: entry.id } : {}),
         },
         include: {
           tournament: true,
@@ -269,12 +297,43 @@ export class PaymentsService {
       });
 
       if (payment.participantId) {
+        if (payment.entryId && dto.status === 'APPROVED') {
+          const entryPredictions = await tx.prediction.count({
+            where: { entryId: payment.entryId },
+          });
+
+          await tx.pollEntry.update({
+            where: { id: payment.entryId },
+            data: {
+              paid: true,
+              ...(entryPredictions === 10
+                ? { predictionsSubmittedAt: new Date() }
+                : {}),
+            },
+          });
+        }
+
+        const savedPredictions =
+          !payment.entryId && dto.status === 'APPROVED'
+            ? await tx.prediction.count({
+                where: {
+                  tournamentId: payment.tournamentId,
+                  userId: payment.userId,
+                },
+              })
+            : 0;
+
         await tx.tournamentParticipant.update({
           where: {
             id: payment.participantId,
           },
           data: {
             paid: dto.status === 'APPROVED',
+            ...(!payment.entryId &&
+            dto.status === 'APPROVED' &&
+            savedPredictions === 10
+              ? { predictionsSubmittedAt: new Date() }
+              : {}),
           },
         });
       }

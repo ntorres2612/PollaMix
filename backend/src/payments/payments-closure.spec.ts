@@ -15,6 +15,9 @@ describe('PaymentsService - protección del cierre', () => {
     tournamentParticipant: {
       update: jest.fn(),
     },
+    prediction: {
+      count: jest.fn(),
+    },
   };
 
   const prisma = {
@@ -52,6 +55,8 @@ describe('PaymentsService - protección del cierre', () => {
       id: 101,
       paid: true,
     });
+
+    tx.prediction.count.mockResolvedValue(0);
 
     service = new PaymentsService(
       prisma as unknown as PrismaService,

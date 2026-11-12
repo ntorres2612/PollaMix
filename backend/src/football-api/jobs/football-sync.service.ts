@@ -20,7 +20,7 @@ export class FootballSyncService {
    * Mantiene:
    * - API-Football 2024 para compatibilidad con
    *   datos históricos/pruebas existentes.
-   * - ESPN 2026 para la PollaMix actual.
+   * - ESPN 2026 para GolPro.
    */
   async updateResults() {
     this.logger.log(

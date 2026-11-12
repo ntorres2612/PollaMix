@@ -12,12 +12,6 @@ export class FootballApiClient {
 
         try {
 
-            console.log('URL:', `https://v3.football.api-sports.io${url}`);
-            console.log(
-                'URL:',
-                `https://v3.football.api-sports.io${url}`,
-            );
-
             const response = await firstValueFrom(
                 this.http.get(
                     `https://v3.football.api-sports.io${url}`,
@@ -29,8 +23,6 @@ export class FootballApiClient {
                     },
                 ),
             );
-
-            console.log(response.data);
 
             return response.data;
 

@@ -23,7 +23,7 @@ export class EspnFootballService {
   /**
    * Mapeo:
    *
-   * ESPN team ID -> Team.id interno de PollaMix
+   * ESPN team ID -> Team.id interno de GolPro
    */
   private readonly teamMap: Record<number, number> = {
     219: 2278, // Guadalajara
@@ -54,7 +54,7 @@ export class EspnFootballService {
    *
    * ESPN no entrega correctamente "week" en los
    * eventos del scoreboard que estamos utilizando,
-   * por lo que PollaMix determina la jornada a
+   * por lo que GolPro determina la jornada a
    * partir de la fecha local del partido.
    */
   private readonly regularSeasonRounds = [

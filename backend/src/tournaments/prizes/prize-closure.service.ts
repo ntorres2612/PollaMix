@@ -910,6 +910,23 @@ export class PrizeClosureService {
                 },
               },
             },
+            pollEntries: {
+              select: {
+                id: true,
+                userId: true,
+                paid: true,
+                predictions: {
+                  where: { tournamentId },
+                  select: { points: true },
+                },
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
           },
         });
 
@@ -972,6 +989,7 @@ export class PrizeClosureService {
             id: true,
             userId: true,
             participantId: true,
+            entryId: true,
             amount: true,
             currency: true,
             status: true,
@@ -1067,29 +1085,55 @@ export class PrizeClosureService {
           approved.map((payment) => payment.userId),
         );
 
-        const candidates = tournament.participants
-          .filter((participant) => paidUserIds.has(participant.userId))
-          .map((participant) => ({
-            userId: participant.userId,
-            name: participant.user.name,
-            points: participant.user.predictions.reduce(
-              (sum, prediction) => sum + prediction.points,
-              0,
-            ),
-          }));
+        const slipRows = Array.isArray(tournament.pollEntries)
+          ? tournament.pollEntries
+          : null;
+
+        const candidates = slipRows
+          ? slipRows
+              .filter((entry) => entry.paid)
+              .map((entry) => ({
+                userId: entry.userId,
+                entryId: entry.id,
+                name: entry.user.name,
+                points: entry.predictions.reduce(
+                  (sum, prediction) => sum + prediction.points,
+                  0,
+                ),
+              }))
+          : tournament.participants
+              .filter((participant) => paidUserIds.has(participant.userId))
+              .map((participant) => ({
+                userId: participant.userId,
+                name: participant.user.name,
+                points: participant.user.predictions.reduce(
+                  (sum, prediction) => sum + prediction.points,
+                  0,
+                ),
+              }));
 
         const distribution = calculatePrizeDistribution(
           validation.revenueCOP,
-          candidates.map(({ userId, points }) => ({
-            userId,
-            points,
-          })),
+          candidates.map((candidate) => {
+            const slip: { userId: number; points: number; entryId?: number } = {
+              userId: candidate.userId,
+              points: candidate.points,
+            };
+
+            if ('entryId' in candidate && typeof candidate.entryId === 'number') {
+              slip.entryId = candidate.entryId;
+            }
+
+            return slip;
+          }),
         );
 
         const winners = distribution.winners.map((winner) => ({
           ...winner,
-          name: candidates.find(
-            (candidate) => candidate.userId === winner.userId,
+          name: candidates.find((candidate) =>
+            winner.entryId != null && 'entryId' in candidate
+              ? candidate.entryId === winner.entryId
+              : candidate.userId === winner.userId,
           )?.name ?? '',
         }));
 

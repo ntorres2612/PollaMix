@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AuthUser, getCurrentUser, logout } from "@/lib/auth";
+import { getMyPrizes } from "@/lib/tournaments";
 
 type NavItem = { href: string; label: string };
 
@@ -32,10 +33,30 @@ export default function Navbar() {
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [balanceCOP, setBalanceCOP] = useState<number | null>(null);
 
   useEffect(() => {
-    setUser(getCurrentUser());
+    const current = getCurrentUser();
+    setUser(current);
     setMobileOpen(false);
+
+    if (!current) {
+      setBalanceCOP(null);
+      return;
+    }
+
+    let active = true;
+    getMyPrizes()
+      .then((prizes) => {
+        if (active) setBalanceCOP(prizes.balanceCOP);
+      })
+      .catch(() => {
+        if (active) setBalanceCOP(null);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [pathname]);
 
   const isAdmin = user?.role === "ADMIN";
@@ -62,6 +83,16 @@ export default function Navbar() {
     router.push("/");
     router.refresh();
   }
+
+  function formatBalance(amount: number) {
+    return amount.toLocaleString("es-CO", {
+      style: "currency",
+      currency: "COP",
+      maximumFractionDigits: 0,
+    });
+  }
+
+  const balanceLabel = balanceCOP === null ? null : formatBalance(balanceCOP);
 
   function linkStyle(href: string, mobile = false) {
     const base = mobile
@@ -105,6 +136,12 @@ export default function Navbar() {
 
         {user ? (
           <>
+            {balanceLabel && (
+              <Link href="/premios" className="ml-2 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-right hover:border-red-500">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Saldo</p>
+                <p className="text-sm font-black text-white">{balanceLabel}</p>
+              </Link>
+            )}
             <div className="ml-2 min-w-0 border-l border-slate-700 pl-4 text-right">
               <p className="max-w-32 truncate text-sm font-bold text-white" title={user.name}>{user.name}</p>
               <p className="text-xs text-slate-400">{isAdmin ? "Administrador" : "Jugador"}</p>
@@ -123,14 +160,14 @@ export default function Navbar() {
       </nav>
 
       <button type="button" aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
-        aria-controls="pollamix-mobile-menu" aria-expanded={mobileOpen}
+        aria-controls="golpro-mobile-menu" aria-expanded={mobileOpen}
         onClick={() => setMobileOpen((open) => !open)}
         className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-white transition hover:border-red-500 xl:hidden">
         <span className="text-2xl leading-none" aria-hidden="true">{mobileOpen ? "×" : "☰"}</span>
       </button>
 
       {mobileOpen && (
-        <div id="pollamix-mobile-menu" className="absolute left-4 right-4 top-[84px] z-[60] max-h-[calc(100vh-100px)] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl xl:hidden">
+        <div id="golpro-mobile-menu" className="absolute left-4 right-4 top-[84px] z-[60] max-h-[calc(100vh-100px)] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl xl:hidden">
           <nav aria-label="Navegación móvil" className="flex flex-col gap-1">
             {publicLinks.map((item) => (
               <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={linkStyle(item.href, true)}>{item.label}</Link>
@@ -149,6 +186,12 @@ export default function Navbar() {
                 <div className="mt-3 border-t border-slate-800 px-4 pt-4">
                   <p className="font-bold text-white">{user.name}</p>
                   <p className="text-xs text-slate-400">{isAdmin ? "Administrador" : "Jugador"}</p>
+                  {balanceLabel && (
+                    <Link href="/premios" onClick={() => setMobileOpen(false)} className="mt-3 block rounded-xl border border-white/10 bg-slate-900 px-4 py-3">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Saldo</p>
+                      <p className="text-lg font-black text-white">{balanceLabel}</p>
+                    </Link>
+                  )}
                 </div>
                 <button type="button" onClick={handleLogout} className="mt-2 rounded-xl border border-red-600 px-4 py-3 text-left text-sm font-semibold text-white hover:bg-red-600">Salir</button>
               </>

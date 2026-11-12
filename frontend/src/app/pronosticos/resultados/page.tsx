@@ -4,7 +4,6 @@ import Link from "next/link";
 
 import {
   useEffect,
-  useMemo,
   useState,
 } from "react";
 
@@ -16,19 +15,19 @@ import Footer from "@/components/layout/Footer";
 import TeamLogo from "@/components/match/TeamLogo";
 
 import { getCurrentUser, logout } from "@/lib/auth";
+import { teamNameEs } from "@/lib/team-name";
 
 import {
+  getMyEntries,
   getMyTournamentHistory,
   getTournamentMyStatus,
+  PollEntrySummary,
   Tournament,
   TournamentParticipationStatus,
 } from "@/lib/tournaments";
 
 import {
-  findPrediction,
-  getMyPredictions,
   getPredictionMatches,
-  PlayerPrediction,
   SelectedPredictionMatch,
 } from "@/lib/prediction-flow";
 
@@ -83,10 +82,10 @@ export default function PredictionResultsPage() {
     );
 
   const [
-    predictions,
-    setPredictions,
+    entries,
+    setEntries,
   ] =
-    useState<PlayerPrediction[]>(
+    useState<PollEntrySummary[]>(
       [],
     );
 
@@ -134,15 +133,15 @@ export default function PredictionResultsPage() {
           setTournament(null);
           setTournamentStatus(null);
           setMatches([]);
-          setPredictions([]);
+          setEntries([]);
           return;
         }
 
-        const [status, selectedMatches, myPredictions] =
+        const [status, selectedMatches, myEntries] =
           await Promise.all([
             getTournamentMyStatus(chosen.id),
             getPredictionMatches(chosen.id),
-            getMyPredictions(),
+            getMyEntries(chosen.id),
           ]);
 
         if (!active) return;
@@ -150,18 +149,7 @@ export default function PredictionResultsPage() {
         setTournament(chosen);
         setTournamentStatus(status);
         setMatches(selectedMatches);
-
-        const selectedMatchIds = new Set(
-          selectedMatches.map((match) => match.id),
-        );
-
-        setPredictions(
-          myPredictions.filter(
-            (prediction) =>
-              prediction.tournamentId === chosen.id &&
-              selectedMatchIds.has(prediction.matchId),
-          ),
-        );
+        setEntries(myEntries);
       } catch (err) {
         if (!active) return;
 
@@ -183,7 +171,7 @@ export default function PredictionResultsPage() {
         setTournament(null);
         setTournamentStatus(null);
         setMatches([]);
-        setPredictions([]);
+        setEntries([]);
       } finally {
         if (active) {
           setLoading(false);
@@ -197,9 +185,6 @@ export default function PredictionResultsPage() {
       active = false;
     };
   }, [router, selectedTournamentId]);
-
-  const completedPredictions =
-    predictions.length;
 
   const finishedMatches =
     matches.filter(
@@ -215,44 +200,21 @@ export default function PredictionResultsPage() {
     matches.length -
     finishedMatches;
 
-  const totalPoints =
-    predictions.reduce(
-      (sum, prediction) =>
-        sum +
-        (prediction.points ?? 0),
-      0,
-    );
+  const slips =
+    entries.map((entry) => ({
+      ...entry,
+      points: entry.predictions.reduce(
+        (sum, prediction) => sum + (prediction.points ?? 0),
+        0,
+      ),
+    }));
 
-  const averagePoints =
-    completedPredictions > 0
-      ? (
-        totalPoints /
-        completedPredictions
-      ).toFixed(1)
-      : "0.0";
-
-  const predictionByMatch =
-    useMemo(() => {
-      const map =
-        new Map<
-          number,
-          PlayerPrediction
-        >();
-
-      for (
-        const prediction of
-        predictions
-      ) {
-        map.set(
-          prediction.matchId,
-          prediction,
-        );
-      }
-
-      return map;
-    }, [
-      predictions,
-    ]);
+  function selectionLabel(selection: string | undefined) {
+    if (selection === "HOME") return "Local";
+    if (selection === "AWAY") return "Visitante";
+    if (selection === "DRAW") return "Empate";
+    return "Sin selección";
+  }
 
   if (loading) {
     return (
@@ -386,67 +348,46 @@ export default function PredictionResultsPage() {
 
         {/* Tarjetas resumen */}
 
-        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-
-          <article className="rounded-2xl border border-red-500/20 bg-red-950/20 p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-red-400">
-              Puntos
+        <section className="mb-8">
+          <div className="mb-4 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+                Puntos por pronóstico
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Cada pronóstico tiene su propia puntuación. No se suman entre sí.
+              </p>
+            </div>
+            <p className="text-sm font-bold text-slate-300">
+              {finishedMatches}/{matches.length} finalizados
             </p>
+          </div>
 
-            <p className="mt-2 text-3xl font-black text-white">
-              {totalPoints}
-            </p>
-
-            <p className="mt-1 text-sm text-slate-400">
-              acumulados
-            </p>
-          </article>
-
-          <article className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Pronósticos
-            </p>
-
-            <p className="mt-2 text-3xl font-black text-white">
-              {completedPredictions}
-              <span className="text-slate-500">
-                /{matches.length}
-              </span>
-            </p>
-
-            <p className="mt-1 text-sm text-slate-400">
-              registrados
-            </p>
-          </article>
-
-          <article className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-              Finalizados
-            </p>
-
-            <p className="mt-2 text-3xl font-black text-white">
-              {finishedMatches}
-            </p>
-
-            <p className="mt-1 text-sm text-slate-400">
-              con resultado
-            </p>
-          </article>
-
-          <article className="rounded-2xl border border-blue-500/20 bg-blue-950/20 p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">
-              Promedio
-            </p>
-
-            <p className="mt-2 text-3xl font-black text-white">
-              {averagePoints}
-            </p>
-
-            <p className="mt-1 text-sm text-slate-400">
-              puntos por pronóstico
-            </p>
-          </article>
-
+          {slips.length === 0 ? (
+            <article className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
+              <p className="font-bold text-white">Todavía no tienes pronósticos</p>
+            </article>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {slips.map((slip) => (
+                <article
+                  key={slip.id}
+                  className="rounded-2xl border border-red-500/20 bg-red-950/20 p-5"
+                >
+                  <p className="text-xs font-bold uppercase tracking-wider text-red-400">
+                    Pronóstico {slip.number}
+                  </p>
+                  <p className="mt-2 text-3xl font-black text-white">
+                    {slip.points}
+                    <span className="ml-2 text-base font-bold text-slate-400">pts</span>
+                  </p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {slip.paid ? "Pago aprobado" : "Pendiente de pago"}
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Error */}
@@ -503,7 +444,7 @@ export default function PredictionResultsPage() {
               </h2>
 
               <p className="mt-1 text-sm text-slate-400">
-                Comparación entre tu pronóstico y el resultado real.
+                Cada pronóstico se compara por separado con el resultado real.
               </p>
             </div>
 
@@ -530,11 +471,6 @@ export default function PredictionResultsPage() {
                   match,
                   index,
                 ) => {
-                  const prediction =
-                    predictionByMatch.get(
-                      match.id,
-                    );
-
                   const hasResult =
                     match.finished &&
                     match.homeScore !== null &&
@@ -597,7 +533,7 @@ export default function PredictionResultsPage() {
 
                           <TeamLogo
   src={match.homeTeam.logo}
-  name={match.homeTeam.name}
+  name={teamNameEs(match.homeTeam.name)}
   size="h-11 w-11"
 />
 
@@ -608,7 +544,7 @@ export default function PredictionResultsPage() {
 
                             <p className="font-black text-white">
                               {
-                                match.homeTeam.name
+                                teamNameEs(match.homeTeam.name)
                               }
                             </p>
                           </div>
@@ -642,14 +578,14 @@ export default function PredictionResultsPage() {
 
                             <p className="font-black text-white">
                               {
-                                match.awayTeam.name
+                                teamNameEs(match.awayTeam.name)
                               }
                             </p>
                           </div>
 
                           <TeamLogo
   src={match.awayTeam.logo}
-  name={match.awayTeam.name}
+  name={teamNameEs(match.awayTeam.name)}
   size="h-11 w-11"
 />
 
@@ -659,51 +595,36 @@ export default function PredictionResultsPage() {
 
                       {/* Comparación */}
 
-                      <div className="mt-6 grid gap-4 border-t border-white/5 pt-5 sm:grid-cols-2">
+                      <div className="mt-6 space-y-2 border-t border-white/5 pt-5">
+                        {slips.length === 0 ? (
+                          <p className="font-bold text-slate-600">Sin pronóstico</p>
+                        ) : (
+                          slips.map((slip) => {
+                            const pick = slip.predictions.find(
+                              (prediction) => prediction.matchId === match.id,
+                            );
 
-                        <div className="rounded-2xl border border-white/5 bg-slate-950/30 p-4">
-
-                          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Mi pronóstico
-                          </p>
-
-                          {prediction ? (
-                            <p className="mt-2 text-2xl font-black text-white">
-                              {tournamentStatus?.predictionsCloseAt !== null &&
-                              tournamentStatus?.predictionsCloseAt !== undefined
-                                ? prediction.homeScore > prediction.awayScore
-                                  ? "Local"
-                                  : prediction.homeScore < prediction.awayScore
-                                    ? "Visitante"
-                                    : "Empate"
-                                : `${prediction.homeScore} - ${prediction.awayScore}`}
-                            </p>
-                          ) : (
-                            <p className="mt-2 font-bold text-slate-600">
-                              Sin pronóstico
-                            </p>
-                          )}
-
-                        </div>
-
-                        <div className="rounded-2xl border border-white/5 bg-slate-950/30 p-4">
-
-                          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Puntos
-                          </p>
-
-                          {prediction ? (
-                            <p className="mt-2 text-2xl font-black text-red-400">
-                              {prediction.points ?? 0}
-                            </p>
-                          ) : (
-                            <p className="mt-2 font-bold text-slate-600">
-                              -
-                            </p>
-                          )}
-
-                        </div>
-
+                            return (
+                              <div
+                                key={slip.id}
+                                className="flex items-center justify-between gap-4 rounded-2xl border border-white/5 bg-slate-950/30 px-4 py-3"
+                              >
+                                <div>
+                                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                    Pronóstico {slip.number}
+                                  </p>
+                                  <p className="mt-1 font-black text-white">
+                                    {selectionLabel(pick?.selection)}
+                                  </p>
+                                </div>
+                                <p className="text-2xl font-black text-red-400">
+                                  {pick ? pick.points ?? 0 : "—"}
+                                  <span className="ml-1 text-sm font-bold text-slate-500">pts</span>
+                                </p>
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
 
                     </article>

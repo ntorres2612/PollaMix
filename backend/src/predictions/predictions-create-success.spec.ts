@@ -20,7 +20,10 @@ describe('Creación de pronósticos - flujo válido', () => {
       findUnique: jest.fn(),
     },
     prediction: {
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      create: jest.fn(),
+    },
+    pollEntry: {
       create: jest.fn(),
     },
   };
@@ -75,7 +78,9 @@ describe('Creación de pronósticos - flujo válido', () => {
       paid: true,
     });
 
-    tx.prediction.findUnique.mockResolvedValue(null);
+    tx.prediction.findFirst.mockResolvedValue(null);
+
+    tx.pollEntry.create.mockResolvedValue({ id: 77 });
 
     tx.prediction.create.mockResolvedValue({
       id: 300,
@@ -113,6 +118,7 @@ describe('Creación de pronósticos - flujo válido', () => {
         userId: 5,
         matchId: 100,
         tournamentId: 99,
+        entryId: 77,
         homeScore: 2,
         awayScore: 1,
       },
@@ -140,7 +146,7 @@ describe('Creación de pronósticos - flujo válido', () => {
   });
 
   it('rechaza pronósticos duplicados', async () => {
-    tx.prediction.findUnique.mockResolvedValue({ id: 200 });
+    tx.prediction.findFirst.mockResolvedValue({ id: 200 });
 
     await expect(
       service.create(5, {

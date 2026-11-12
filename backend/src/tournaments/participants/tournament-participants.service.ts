@@ -214,8 +214,6 @@ export class TournamentParticipantsService {
       return await this.prisma.$transaction(
         async (tx) => {
           // Bloquea la fila del torneo durante la inscripción.
-          // Esto permite controlar el cupo incluso cuando
-          // llegan varias solicitudes simultáneas.
           const rows = await tx.$queryRaw<
             Array<{ id: number }>
           >`
@@ -289,22 +287,6 @@ export class TournamentParticipantsService {
           if (existing) {
             throw new BadRequestException(
               'Ya estás inscrito en esta Polla.',
-            );
-          }
-
-          const participantsCount =
-            await tx.tournamentParticipant.count({
-              where: {
-                tournamentId,
-              },
-            });
-
-          if (
-            tournament.maxPlayers > 0 &&
-            participantsCount >= tournament.maxPlayers
-          ) {
-            throw new BadRequestException(
-              'La Polla alcanzó el máximo de participantes.',
             );
           }
 

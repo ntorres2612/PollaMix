@@ -498,7 +498,7 @@ export class FootballApiService {
       ) {
         skipped++;
         console.warn(
-          `[PollaMix] Partido ${fixtureId}: marcador ` +
+          `[GolPro] Partido ${fixtureId}: marcador ` +
           `reglamentario inválido para estado ${status}. ` +
           'Se omite la actualización.'
         );
@@ -673,6 +673,15 @@ export class FootballApiService {
       if (existingMatch) {
         await lockMatchForPrizeSafeUpdate(tx, existingMatch.id);
       }
+      const recordedResult =
+        existingMatch !== null &&
+        existingMatch.finished &&
+        existingMatch.scoredAt !== null &&
+        existingMatch.homeScore !== null &&
+        existingMatch.awayScore !== null &&
+        !finished
+          ? existingMatch
+          : null;
       const savedMatch =
         await tx.match.upsert({
           where: {
@@ -681,13 +690,20 @@ export class FootballApiService {
           },
 
           update: {
-            date:
-              fixtureDate,
+            date: recordedResult
+              ? recordedResult.date
+              : fixtureDate,
 
-            homeScore,
-            awayScore,
+            homeScore: recordedResult
+              ? recordedResult.homeScore
+              : homeScore,
+            awayScore: recordedResult
+              ? recordedResult.awayScore
+              : awayScore,
 
-            finished,
+            finished: recordedResult
+              ? true
+              : finished,
 
             homeTeamId,
             awayTeamId,
@@ -902,7 +918,7 @@ export class FootballApiService {
         (homeScore === null || awayScore === null)
       ) {
         console.warn(
-          `[PollaMix] Partido ${fixtureId}: marcador ` +
+          `[GolPro] Partido ${fixtureId}: marcador ` +
           `reglamentario inválido para estado ${status}. ` +
           'Se omite la actualización.'
         );
@@ -1093,5 +1109,540 @@ export class FootballApiService {
       month <= 12
       ? 'Apertura'
       : 'Clausura';
+  }
+
+  async importAvailableMatches(
+    from?: string,
+    to?: string,
+  ) {
+    const start = this.parseImportDate(
+      from,
+      this.utcToday(),
+    );
+    const defaultEnd = new Date(start);
+    defaultEnd.setUTCDate(
+      defaultEnd.getUTCDate() + 13,
+    );
+    const end = this.parseImportDate(
+      to,
+      defaultEnd,
+    );
+
+    if (end < start) {
+      throw new BadRequestException(
+        'La fecha final no puede ser anterior a la inicial',
+      );
+    }
+
+    const spanDays =
+      Math.round(
+        (end.getTime() - start.getTime()) /
+          86_400_000,
+      ) + 1;
+
+    if (spanDays > 14) {
+      throw new BadRequestException(
+        'El rango máximo es de 14 días para no agotar la cuota de la API',
+      );
+    }
+
+    let dates = this.eachUtcDate(start, end);
+    let seasonAdjusted = false;
+    let byDate: Array<{
+      date: string;
+      fixtures: number;
+      imported: number;
+      updated: number;
+      skipped: number;
+      error?: string;
+    }> = [];
+    let dateWindowApplied = false;
+    const byLeague = new Map<
+      number,
+      { name: string; matches: number }
+    >();
+
+    let imported = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (let index = 0; index < dates.length; index++) {
+      if (index > 0) {
+        await this.sleep(6500);
+      }
+
+      const date = dates[index];
+      const loaded = await this.loadFixturesByDate(date);
+
+      if (
+        !seasonAdjusted &&
+        this.isPlanSeasonError(loaded.errors)
+      ) {
+        dates = dates.map((value) =>
+          this.shiftYear(value, -2),
+        );
+        seasonAdjusted = true;
+        index = -1;
+        continue;
+      }
+
+      if (this.hasApiErrors(loaded.errors)) {
+        const window = this.planDateWindow(loaded.errors);
+        if (window && !dateWindowApplied) {
+          dateWindowApplied = true;
+          const allowed = this.eachUtcDate(
+            this.parseImportDate(window.from, start),
+            this.parseImportDate(window.to, end),
+          );
+          const done = new Set(
+            byDate
+              .filter((day) => !day.error)
+              .map((day) => day.date),
+          );
+          const pending = allowed.filter((value) => !done.has(value));
+          byDate = byDate.filter(
+            (day) => allowed.includes(day.date) && !day.error,
+          );
+          dates = [
+            ...allowed.filter((value) => done.has(value)),
+            ...pending,
+          ];
+          index = dates.length - pending.length - 1;
+          continue;
+        }
+
+        byDate.push({
+          date,
+          fixtures: 0,
+          imported: 0,
+          updated: 0,
+          skipped: 0,
+          error: JSON.stringify(loaded.errors).slice(0, 300),
+        });
+        continue;
+      }
+
+      const fixtures = loaded.fixtures;
+      let dayImported = 0;
+      let dayUpdated = 0;
+      let daySkipped = 0;
+
+      for (const fixture of fixtures) {
+        let result: 'imported' | 'updated' | 'skipped';
+        try {
+          result = await this.saveAvailableFixture(fixture);
+        } catch {
+          result = 'skipped';
+        }
+        if (result === 'imported') {
+          dayImported++;
+          imported++;
+        } else if (result === 'updated') {
+          dayUpdated++;
+          updated++;
+        } else {
+          daySkipped++;
+          skipped++;
+          continue;
+        }
+
+        const leagueId = Number(fixture?.league?.id);
+        const leagueName = String(
+          fixture?.league?.name ?? leagueId,
+        );
+        const current = byLeague.get(leagueId) ?? {
+          name: leagueName,
+          matches: 0,
+        };
+        current.matches++;
+        byLeague.set(leagueId, current);
+      }
+
+      byDate.push({
+        date,
+        fixtures: fixtures.length,
+        imported: dayImported,
+        updated: dayUpdated,
+        skipped: daySkipped,
+      });
+    }
+
+    return {
+      success: true,
+      from: dates[0],
+      to: dates[dates.length - 1],
+      seasonAdjusted,
+      imported,
+      updated,
+      skipped,
+      fixturesReceived: byDate.reduce(
+        (sum, day) => sum + day.fixtures,
+        0,
+      ),
+      championships: [...byLeague.entries()]
+        .map(([id, value]) => ({
+          id,
+          name: value.name,
+          matches: value.matches,
+        }))
+        .sort((a, b) => b.matches - a.matches),
+      dates: byDate,
+    };
+  }
+
+  private async saveAvailableFixture(
+    fixture: any,
+  ): Promise<'imported' | 'updated' | 'skipped'> {
+    const fixtureId = Number(fixture?.fixture?.id);
+    const leagueId = Number(fixture?.league?.id);
+    const season = Number(fixture?.league?.season);
+    const homeTeamId = Number(fixture?.teams?.home?.id);
+    const awayTeamId = Number(fixture?.teams?.away?.id);
+    const rawDate = fixture?.fixture?.date;
+
+    if (
+      !Number.isSafeInteger(fixtureId) ||
+      !Number.isSafeInteger(leagueId) ||
+      !Number.isSafeInteger(season) ||
+      !Number.isSafeInteger(homeTeamId) ||
+      !Number.isSafeInteger(awayTeamId) ||
+      homeTeamId === awayTeamId ||
+      typeof rawDate !== 'string'
+    ) {
+      return 'skipped';
+    }
+
+    const fixtureDate = new Date(rawDate);
+    if (Number.isNaN(fixtureDate.getTime())) {
+      return 'skipped';
+    }
+
+    const leagueName = String(
+      fixture?.league?.name || `Liga ${leagueId}`,
+    ).slice(0, 180);
+    const roundName = String(
+      fixture?.league?.round || 'Fecha',
+    ).slice(0, 180);
+    const roundNumber = this.extractRoundNumber(roundName);
+
+    await this.prisma.league.upsert({
+      where: { id: leagueId },
+      create: {
+        id: leagueId,
+        name: leagueName,
+        type: 'League',
+        country: String(
+          fixture?.league?.country || 'Desconocido',
+        ).slice(0, 120),
+        logo: fixture?.league?.logo ?? null,
+        season,
+      },
+      update: {
+        name: leagueName,
+        logo: fixture?.league?.logo ?? null,
+      },
+    });
+
+    await this.upsertFixtureTeam(
+      fixture?.teams?.home,
+      leagueId,
+    );
+    await this.upsertFixtureTeam(
+      fixture?.teams?.away,
+      leagueId,
+    );
+
+    let matchday = await this.prisma.matchday.findFirst({
+      where: {
+        leagueId,
+        season,
+        tournament: leagueName,
+        roundName,
+      },
+    });
+
+    if (!matchday) {
+      matchday = await this.prisma.matchday.create({
+        data: {
+          leagueId,
+          season,
+          tournament: leagueName,
+          roundName,
+          number: roundNumber,
+          startDate: fixtureDate,
+          endDate: fixtureDate,
+          active: false,
+        },
+      });
+    } else {
+      const startDate =
+        fixtureDate < matchday.startDate
+          ? fixtureDate
+          : matchday.startDate;
+      const endDate =
+        fixtureDate > matchday.endDate
+          ? fixtureDate
+          : matchday.endDate;
+
+      if (
+        startDate.getTime() !== matchday.startDate.getTime() ||
+        endDate.getTime() !== matchday.endDate.getTime()
+      ) {
+        matchday = await this.prisma.matchday.update({
+          where: { id: matchday.id },
+          data: { startDate, endDate },
+        });
+      }
+    }
+
+    const status = fixture?.fixture?.status?.short;
+    const finished = ['FT', 'AET', 'PEN'].includes(status);
+    const homeGoals = fixture?.goals?.home;
+    const awayGoals = fixture?.goals?.away;
+    const homeScore =
+      finished &&
+      Number.isInteger(homeGoals) &&
+      homeGoals >= 0 &&
+      homeGoals <= 30
+        ? homeGoals
+        : null;
+    const awayScore =
+      finished &&
+      Number.isInteger(awayGoals) &&
+      awayGoals >= 0 &&
+      awayGoals <= 30
+        ? awayGoals
+        : null;
+
+    const { existingMatch } = await this.prisma.$transaction(
+      async (tx) => {
+        const existingMatch = await tx.match.findUnique({
+          where: { apiId: fixtureId },
+        });
+
+        if (existingMatch) {
+          await lockMatchForPrizeSafeUpdate(tx, existingMatch.id);
+        }
+
+        const apiFinished =
+          finished && homeScore !== null && awayScore !== null;
+        const recordedResult =
+          existingMatch !== null &&
+          existingMatch.finished &&
+          existingMatch.scoredAt !== null &&
+          existingMatch.homeScore !== null &&
+          existingMatch.awayScore !== null &&
+          !apiFinished
+            ? existingMatch
+            : null;
+
+        const savedMatch = await tx.match.upsert({
+          where: { apiId: fixtureId },
+          update: {
+            date: recordedResult ? recordedResult.date : fixtureDate,
+            homeScore: recordedResult ? recordedResult.homeScore : homeScore,
+            awayScore: recordedResult ? recordedResult.awayScore : awayScore,
+            finished: recordedResult ? true : apiFinished,
+            homeTeamId,
+            awayTeamId,
+            matchdayId: matchday.id,
+            leagueId,
+          },
+          create: {
+            apiId: fixtureId,
+            date: fixtureDate,
+            homeScore,
+            awayScore,
+            finished: finished && homeScore !== null && awayScore !== null,
+            homeTeamId,
+            awayTeamId,
+            matchdayId: matchday.id,
+            leagueId,
+          },
+        });
+
+        if (
+          savedMatch.finished &&
+          savedMatch.homeScore !== null &&
+          savedMatch.awayScore !== null
+        ) {
+          await this.scoringService.scoreMatchInTransaction(
+            tx,
+            savedMatch.id,
+          );
+        }
+
+        return { existingMatch };
+      },
+      { timeout: 20000 },
+    );
+
+    return existingMatch ? 'updated' : 'imported';
+  }
+
+  private async upsertFixtureTeam(
+    team: any,
+    leagueId: number,
+  ) {
+    const id = Number(team?.id);
+    const name = String(team?.name || '').trim();
+
+    if (!Number.isSafeInteger(id) || !name) {
+      throw new BadRequestException(
+        'El partido no trae un equipo válido',
+      );
+    }
+
+    const shortName = String(
+      team?.code || name.slice(0, 3),
+    )
+      .trim()
+      .slice(0, 12)
+      .toUpperCase();
+
+    await this.prisma.team.upsert({
+      where: { id },
+      create: {
+        id,
+        name: name.slice(0, 180),
+        shortName: shortName || 'EQP',
+        logo: team?.logo || '',
+        leagueId,
+      },
+      update: {
+        name: name.slice(0, 180),
+        shortName: shortName || 'EQP',
+        logo: team?.logo || '',
+      },
+    });
+  }
+
+  private parseImportDate(
+    value: string | undefined,
+    fallback: Date,
+  ) {
+    if (!value) {
+      return fallback;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      throw new BadRequestException(
+        'Las fechas deben usar el formato YYYY-MM-DD',
+      );
+    }
+
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    if (
+      Number.isNaN(parsed.getTime()) ||
+      parsed.toISOString().slice(0, 10) !== value
+    ) {
+      throw new BadRequestException(
+        'La fecha indicada no existe',
+      );
+    }
+
+    return parsed;
+  }
+
+  private utcToday() {
+    const now = new Date();
+    return new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+      ),
+    );
+  }
+
+  private eachUtcDate(start: Date, end: Date) {
+    const dates: string[] = [];
+    const cursor = new Date(start);
+
+    while (cursor <= end) {
+      dates.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+
+    return dates;
+  }
+
+  private shiftYear(date: string, years: number) {
+    const [year, month, day] = date.split('-').map(Number);
+    const shifted = new Date(Date.UTC(year + years, month - 1, day));
+    return shifted.toISOString().slice(0, 10);
+  }
+
+  private extractRoundNumber(roundName: string) {
+    const numbers = roundName.match(/\d+/g);
+    if (!numbers) {
+      return null;
+    }
+
+    const value = Number(numbers[numbers.length - 1]);
+    return Number.isSafeInteger(value) && value > 0 && value <= 200
+      ? value
+      : null;
+  }
+
+  private hasApiErrors(errors: unknown) {
+    if (!errors) {
+      return false;
+    }
+
+    if (Array.isArray(errors)) {
+      return errors.length > 0;
+    }
+
+    if (typeof errors === 'object') {
+      return Object.keys(errors).length > 0;
+    }
+
+    return true;
+  }
+
+  private async loadFixturesByDate(date: string) {
+    const response = await this.client.get('/fixtures', {
+      date,
+    });
+
+    if (this.hasApiErrors(response?.errors)) {
+      return {
+        fixtures: [] as any[],
+        errors: response.errors,
+      };
+    }
+
+    return {
+      fixtures: Array.isArray(response?.response)
+        ? response.response
+        : [],
+      errors: null,
+    };
+  }
+
+  private planDateWindow(errors: unknown) {
+    const match = JSON.stringify(errors ?? '').match(
+      /try from (\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})/i,
+    );
+
+    if (!match) {
+      return null;
+    }
+
+    return {
+      from: match[1],
+      to: match[2],
+    };
+  }
+
+  private isPlanSeasonError(errors: unknown) {
+    return /free plans do not have access to this season/i.test(
+      JSON.stringify(errors ?? ''),
+    );
+  }
+
+  private sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

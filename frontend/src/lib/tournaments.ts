@@ -33,6 +33,10 @@ export interface Tournament {
 
   maxPlayers: number;
 
+  participantsCount?: number;
+
+  predictionsCount?: number;
+
   registrationStartsAt: string;
 
   registrationEndsAt: string;
@@ -115,12 +119,145 @@ export async function selectTournamentMatches(
   );
 }
 
+export interface UpcomingMatch {
+  id: number;
+  date: string;
+  homeTeam: string;
+  awayTeam: string;
+}
+
+export interface UpcomingRound {
+  id: number;
+  roundName: string;
+  number: number | null;
+  matches: UpcomingMatch[];
+}
+
+export interface UpcomingChampionship {
+  leagueId: number;
+  season: number;
+  name: string;
+  country: string;
+  upcoming: number;
+  rounds: UpcomingRound[];
+}
+
+export async function getUpcomingBoard(): Promise<{
+  championships: UpcomingChampionship[];
+}> {
+  return apiFetch('/tournaments/upcoming-board');
+}
+
+export async function openTournament(input: {
+  name: string;
+  description?: string;
+  inscription: number;
+  currency: 'COP' | 'USD';
+  matchIds: number[];
+}): Promise<Tournament> {
+  return apiFetch<Tournament>('/tournaments/open', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 export async function getTournaments(): Promise<
   Tournament[]
 > {
   return apiFetch<Tournament[]>(
     "/tournaments",
   );
+}
+
+export interface AdminSlip {
+  key: string;
+  participantId: number;
+  userId: number;
+  name: string;
+  email: string;
+  slipNumber: number;
+  entryId: number | null;
+  payment: TournamentPayment | null;
+  paid: boolean;
+}
+
+export function buildAdminSlips(
+  participants: TournamentParticipant[],
+  payments: TournamentPayment[],
+): AdminSlip[] {
+  const slips: AdminSlip[] = [];
+
+  for (const participant of participants) {
+    const ownPayments = payments.filter(
+      (payment) =>
+        payment.participantId === participant.id ||
+        payment.userId === participant.userId,
+    );
+
+    const latestBySlip = new Map<string, TournamentPayment>();
+
+    for (const payment of ownPayments) {
+      const slipKey =
+        payment.entryId != null
+          ? `entry-${payment.entryId}`
+          : `payment-${payment.id}`;
+      const current = latestBySlip.get(slipKey);
+
+      if (!current || payment.id > current.id) {
+        latestBySlip.set(slipKey, payment);
+      }
+    }
+
+    const ordered = [...latestBySlip.values()].sort(
+      (left, right) => left.id - right.id,
+    );
+
+    if (ordered.length === 0) {
+      slips.push({
+        key: `participant-${participant.id}`,
+        participantId: participant.id,
+        userId: participant.userId,
+        name: participant.user.name,
+        email: participant.user.email,
+        slipNumber: 1,
+        entryId: null,
+        payment: null,
+        paid: participant.paid,
+      });
+      continue;
+    }
+
+    ordered.forEach((payment, index) => {
+      const slipNumber = index + 1;
+
+      slips.push({
+        key: `payment-${payment.id}`,
+        participantId: participant.id,
+        userId: participant.userId,
+        name:
+          ordered.length > 1
+            ? `${participant.user.name} · Pronóstico ${slipNumber}`
+            : participant.user.name,
+        email: participant.user.email,
+        slipNumber,
+        entryId: payment.entryId ?? null,
+        payment,
+        paid: payment.status === "APPROVED",
+      });
+    });
+  }
+
+  return slips.sort((left, right) => {
+    const priority = (slip: AdminSlip) =>
+      slip.payment?.status === "PENDING" ? 0 : slip.paid ? 2 : 1;
+    const difference = priority(left) - priority(right);
+
+    if (difference !== 0) {
+      return difference;
+    }
+
+    return left.name.localeCompare(right.name, "es");
+  });
 }
 
 export interface TournamentParticipant {
@@ -151,6 +288,8 @@ export interface TournamentRankingEntry {
 
   id: number;
 
+  userId?: number;
+
   name: string;
 
   points: number;
@@ -161,6 +300,33 @@ export async function getTournament(
 ): Promise<TournamentDetail> {
   return apiFetch<TournamentDetail>(
     `/tournaments/${tournamentId}`,
+  );
+}
+
+export interface PollEntrySummary {
+  id: number;
+  number: number;
+  paid: boolean;
+  pending: boolean;
+  predictionsSubmittedAt: string | null;
+  payment: {
+    id: number;
+    status: string;
+    amount: number;
+    reference: string;
+  } | null;
+  predictions: {
+    matchId: number;
+    selection: "HOME" | "DRAW" | "AWAY";
+    points: number;
+  }[];
+}
+
+export async function getMyEntries(
+  tournamentId: number,
+): Promise<PollEntrySummary[]> {
+  return apiFetch<PollEntrySummary[]>(
+    `/tournaments/${tournamentId}/my-entries`,
   );
 }
 
@@ -199,6 +365,8 @@ export interface TournamentParticipationStatus {
   maxPlayers: number;
 
   participantsCount: number;
+
+  predictionsCount?: number;
 
   isParticipant: boolean;
 
@@ -257,6 +425,8 @@ export interface TournamentPayment {
 
   participantId?: number | null;
 
+  entryId?: number | null;
+
   participant?: {
     id: number;
 
@@ -278,6 +448,7 @@ export interface TournamentPayment {
 
 export interface CreatePaymentInput {
   tournamentId: number;
+  entryId?: number;
 }
 
 export async function createPayment(
@@ -376,10 +547,12 @@ export async function approveParticipantPayment(
 
 export interface TournamentPrizeWinner {
   userId: number;
+  entryId?: number;
   name: string;
   points: number;
   position: number;
   amountCOP: number;
+  paid?: boolean;
 }
 
 export interface TournamentPrizesResponse {
@@ -455,10 +628,53 @@ export async function getPrizeHistory(): Promise<PublicPrizeHistory[]> {
   );
 }
 
+export interface MyPrize {
+  tournamentId: number;
+  tournamentName: string;
+  season: number;
+  closedAt: string | null;
+  position: number;
+  points: number;
+  amountCOP: number;
+  provisional?: boolean;
+  concept?: "ganancia";
+  paid?: boolean;
+}
+
+export interface MyPrizes {
+  currency: "COP";
+  balanceKind?: "profit" | "winnings";
+  balanceCOP: number;
+  history: MyPrize[];
+}
+
+export interface MyPrizes {
+  currency: "COP";
+  balanceCOP: number;
+  history: MyPrize[];
+}
+
+export async function getMyPrizes(): Promise<MyPrizes> {
+  return apiFetch<MyPrizes>("/tournaments/my-prizes");
+}
+
 export async function getTournamentPrizesAdmin(
   tournamentId: number,
 ): Promise<TournamentPrizesResponse> {
   return apiFetch<TournamentPrizesResponse>(
     `/tournaments/${tournamentId}/prizes/admin`,
+  );
+}
+
+export async function markWinnerPaid(
+  tournamentId: number,
+  entryId: number,
+) {
+  return apiFetch(
+    `/tournaments/${tournamentId}/prize-payouts`,
+    {
+      method: "POST",
+      body: JSON.stringify({ entryId }),
+    },
   );
 }

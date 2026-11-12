@@ -31,7 +31,7 @@ const sections = [
   },
   {
     title: "8. Pagos y premios",
-    text: "La bolsa de premios corresponde al 67,81 % de la recaudación de inscripciones aprobadas en COP. El 32,19 % restante corresponde a GolPro. De la bolsa de premios, se asigna el 70 % al primer puesto, el 20 % al segundo y el 10 % al tercero. Los participantes con la misma puntuación comparten posición y dividen el importe asignado a ella. El siguiente puntaje distinto ocupa la siguiente posición, aunque haya varios jugadores empatados en la anterior. Los importes definitivos solo se establecen tras el cierre oficial.",
+    text: "Quienes empatan en puntos comparten el puesto. El premio de ese puesto se divide entre ellos, y el siguiente puntaje ocupa el puesto siguiente. La clasificación es pública. El valor que corresponde a cada ganador y la ganancia de la Polla los consulta únicamente el administrador.",
   },
   {
     title: "9. Reclamaciones",
