@@ -8,9 +8,6 @@ import { FootballApiClient } from './football-api.client';
 import { PredictionsModule } from '../predictions/predictions.module';
 import { FootballSyncService } from './jobs/football-sync.service';
 
-import { EspnFootballController } from './espn/espn-football.controller';
-import { EspnFootballService } from './espn/espn-football.service';
-
 @Module({
   imports: [
     HttpModule,
@@ -21,18 +18,15 @@ import { EspnFootballService } from './espn/espn-football.service';
     FootballApiClient,
     FootballApiService,
     FootballSyncService,
-    EspnFootballService,
   ],
 
   controllers: [
     FootballApiController,
-    EspnFootballController,
   ],
 
   exports: [
     FootballApiClient,
     FootballApiService,
-    EspnFootballService,
   ],
 })
 export class FootballApiModule {}

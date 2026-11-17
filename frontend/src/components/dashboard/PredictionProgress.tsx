@@ -5,11 +5,13 @@ import { usePredictionContext } from "@/context/PredictionContext";
 
 interface PredictionProgressProps {
   tournamentId: number;
+  totalMatches?: number;
   predictionsSubmittedAt?: string | null;
 }
 
 export default function PredictionProgress({
   tournamentId,
+  totalMatches = 0,
   predictionsSubmittedAt = null,
 }: PredictionProgressProps) {
   const { predictions } = usePredictionContext();
@@ -21,7 +23,7 @@ export default function PredictionProgress({
 
   const confirmed = Boolean(predictionsSubmittedAt);
 
-  const total = confirmed ? 10 : savedCount;
+  const total = confirmed && totalMatches > 0 ? totalMatches : savedCount;
 
   return (
     <div className="my-16 rounded-xl bg-red-600 p-6 text-center">
@@ -30,7 +32,7 @@ export default function PredictionProgress({
       </h2>
 
       <p className="mt-5 text-5xl font-black">
-        {total} / 10
+        {total} / {totalMatches > 0 ? totalMatches : total}
       </p>
 
       {confirmed && (

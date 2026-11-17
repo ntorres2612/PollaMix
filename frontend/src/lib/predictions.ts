@@ -80,9 +80,9 @@ export async function deletePrediction(
 export async function submitPredictions(
   data: SubmitPredictionsData,
 ): Promise<unknown> {
-  if (data.predictions.length !== 10) {
+  if (data.predictions.length < 1) {
     throw new Error(
-      "Debes seleccionar los resultados de los 10 partidos.",
+      "Debes seleccionar el resultado de cada partido.",
     );
   }
 
@@ -90,9 +90,9 @@ export async function submitPredictions(
     data.predictions.map((prediction) => prediction.matchId),
   );
 
-  if (uniqueMatchIds.size !== 10) {
+  if (uniqueMatchIds.size !== data.predictions.length) {
     throw new Error(
-      "Los 10 pronósticos deben corresponder a partidos diferentes.",
+      "Cada pronóstico debe corresponder a un partido diferente.",
     );
   }
 

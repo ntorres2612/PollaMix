@@ -3,13 +3,12 @@
 import { useEffect, useState } from "react";
 
 import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
 import TournamentRanking from "@/components/tournaments/TournamentRanking";
 
 import { getCurrentUser } from "@/lib/auth";
+import GuestPitch from "@/components/home/GuestPitch";
 import {
   getCurrentPlayerTournament,
-  getCurrentTournament,
 } from "@/lib/tournaments";
 
 interface Tournament {
@@ -29,20 +28,25 @@ export default function ClasificacionPage() {
 
   const [currentUserId, setCurrentUserId] =
     useState<number | undefined>(undefined);
+  const [viewer, setViewer] = useState<ReturnType<typeof getCurrentUser> | undefined>(undefined);
 
   useEffect(() => {
+    const user = getCurrentUser();
+    setViewer(user);
+
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     async function load() {
       try {
         setLoading(true);
         setError("");
 
-        const user = getCurrentUser();
-
         setCurrentUserId(user?.id);
 
-        const currentTournament = user
-          ? await getCurrentPlayerTournament()
-          : await getCurrentTournament();
+        const currentTournament = await getCurrentPlayerTournament();
 
         setTournament(
           currentTournament ?? null,
@@ -65,6 +69,20 @@ export default function ClasificacionPage() {
 
     load();
   }, []);
+
+  if (viewer === null) {
+    return (
+      <main className="min-h-screen bg-[#071321] text-white">
+        <Header />
+        <div className="pt-16">
+          <GuestPitch
+            title="La clasificación es para los jugadores"
+            lead="Inicia sesión para ver las posiciones y los puntos. Sin cuenta no mostramos quién va ganando."
+          />
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#071321] text-white">
@@ -141,7 +159,6 @@ export default function ClasificacionPage() {
           )}
       </div>
 
-      <Footer />
     </main>
   );
 }

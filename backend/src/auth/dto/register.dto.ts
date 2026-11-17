@@ -20,8 +20,8 @@ export class RegisterDto {
   password!: string;
 
   @IsString()
-  @Matches(/^\+573\d{9}$/, {
-    message: 'El celular debe ser un número móvil colombiano válido.',
+  @Matches(/^\+[1-9]\d{7,14}$/, {
+    message: 'El celular debe incluir el indicativo internacional, por ejemplo +57 300 123 4567.',
   })
   phone!: string;
 

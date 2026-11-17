@@ -66,7 +66,7 @@ export default function TournamentMatchesAdminPage() {
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Selecciona los 10 partidos que estarán disponibles
+              Selecciona los partidos que estarán disponibles
               para realizar pronósticos.
             </p>
           </div>

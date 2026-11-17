@@ -38,7 +38,7 @@ export interface SelectedPredictionMatch
 }
 
 /**
- * Obtiene los 10 partidos seleccionados
+ * Obtiene los partidos seleccionados
  * específicamente para el torneo.
  */
 export async function getPredictionMatches(

@@ -1,11 +1,14 @@
 
 "use client";
 
+import { useEffect, useState } from "react";
+
 import TeamLogo from "./TeamLogo";
 
 import { ApiMatch } from "@/types/match";
 import type { PredictionSelection } from "@/lib/predictions";
 import { teamNameEs } from "@/lib/team-name";
+import { matchClock } from "@/lib/match-clock";
 import MatchSelector from "./MatchSelector";
 
 interface MatchCardProps {
@@ -26,11 +29,20 @@ export default function MatchCard({
   onSelectionChange,
   canPredict,
 }: MatchCardProps) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const clock = window.setInterval(() => setNow(Date.now()), 15000);
+    return () => window.clearInterval(clock);
+  }, []);
+
   const matchDate = new Date(match.date);
+  const clock = matchClock(match, now);
 
   const formattedDate = matchDate.toLocaleDateString(
     "es-CO",
     {
+      timeZone: "America/Bogota",
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -40,13 +52,14 @@ export default function MatchCard({
   const formattedTime = matchDate.toLocaleTimeString(
     "es-CO",
     {
+      timeZone: "America/Bogota",
       hour: "2-digit",
       minute: "2-digit",
     },
   );
 
   const matchHasStarted =
-    match.finished || matchDate.getTime() <= Date.now();
+    match.finished || matchDate.getTime() <= now;
 
   return (
     <div
@@ -87,17 +100,7 @@ export default function MatchCard({
 
         {/* CENTRO */}
         <div className="min-w-[130px] text-center">
-          {match.finished ? (
-            <>
-              <p className="text-2xl font-black">
-                {match.homeScore} - {match.awayScore}
-              </p>
-
-              <p className="mt-1 text-xs text-slate-400">
-                Finalizado
-              </p>
-            </>
-          ) : (
+          {clock.phase === "upcoming" ? (
             <>
               <p className="text-2xl font-black text-red-500">
                 VS
@@ -109,6 +112,16 @@ export default function MatchCard({
 
               <p className="text-xs text-slate-500">
                 {formattedTime}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-2xl font-black">
+                {clock.score ?? "–"}
+              </p>
+
+              <p className={`mt-1 text-xs ${clock.phase === "live" ? "font-bold text-red-300" : "text-slate-400"}`}>
+                {clock.minute}
               </p>
             </>
           )}

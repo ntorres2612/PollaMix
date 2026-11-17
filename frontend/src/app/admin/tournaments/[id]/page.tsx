@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import Container from '@/components/ui/Container';
+import RankingPages, {
+  RANKING_PAGE_SIZE,
+} from '@/components/ui/RankingPages';
 import {
   getCurrentUser,
   isAuthenticated,
@@ -76,6 +79,9 @@ export default function AdminTournamentDetailPage() {
   const [tournament, setTournament] =
     useState<TournamentDetail | null>(null);
 
+  const [slipPage, setSlipPage] = useState(1);
+  const [rankingPage, setRankingPage] = useState(1);
+  const [winnerPage, setWinnerPage] = useState(1);
   const [ranking, setRanking] =
     useState<TournamentRankingEntry[]>([]);
 
@@ -92,8 +98,10 @@ export default function AdminTournamentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [approvingPayment, setApprovingPayment] =
-    useState<number | null>(null);
+  const [processingPayment, setProcessingPayment] = useState<{
+    id: number;
+    action: 'APPROVED' | 'REJECTED';
+  } | null>(null);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -182,20 +190,81 @@ export default function AdminTournamentDetailPage() {
   const pendingSlips = slips.filter(
     (slip) => slip.payment?.status === 'PENDING',
   );
+  const inscribed = useMemo(() => {
+    if (!tournament) return [];
 
-  async function handleApprovePayment(paymentId: number) {
-    try {
-      const payment = payments.find((item) => item.id === paymentId);
+    return tournament.participants.map((participant) => ({
+      participant,
+      predictions: slips.filter(
+        (slip) =>
+          slip.participantId === participant.id &&
+          slip.payment != null,
+      ),
+    }));
+  }, [tournament, slips]);
+  const slipPageCount = Math.max(
+    1,
+    Math.ceil(inscribed.length / RANKING_PAGE_SIZE),
+  );
+  const currentSlipPage = Math.min(slipPage, slipPageCount);
+  const visibleInscribed = inscribed.slice(
+    (currentSlipPage - 1) * RANKING_PAGE_SIZE,
+    currentSlipPage * RANKING_PAGE_SIZE,
+  );
+  const rankingPageCount = Math.max(
+    1,
+    Math.ceil(ranking.length / RANKING_PAGE_SIZE),
+  );
+  const currentRankingPage = Math.min(rankingPage, rankingPageCount);
+  const visibleRanking = ranking.slice(
+    (currentRankingPage - 1) * RANKING_PAGE_SIZE,
+    currentRankingPage * RANKING_PAGE_SIZE,
+  );
+  const winners = prizes?.winners ?? [];
+  const winnerPageCount = Math.max(
+    1,
+    Math.ceil(winners.length / RANKING_PAGE_SIZE),
+  );
+  const currentWinnerPage = Math.min(winnerPage, winnerPageCount);
+  const visibleWinners = winners.slice(
+    (currentWinnerPage - 1) * RANKING_PAGE_SIZE,
+    currentWinnerPage * RANKING_PAGE_SIZE,
+  );
 
-      if (!payment || payment.status !== 'PENDING') {
-        setError('Este pronóstico no tiene un pago pendiente para aprobar.');
+  function openWinnerPage(page: number) {
+    setWinnerPage(page);
+    document.getElementById('valor-ganadores')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  }
+
+  async function handlePaymentDecision(
+    paymentId: number,
+    status: 'APPROVED' | 'REJECTED',
+  ) {
+    const payment = payments.find((item) => item.id === paymentId);
+
+    if (!payment || payment.status !== 'PENDING') {
+      setError('Este pronóstico no tiene un pago pendiente.');
+      return;
+    }
+
+    if (status === 'REJECTED') {
+      const confirmed = window.confirm(
+        '¿Rechazas este pago porque no ingresó? El jugador podrá enviar otra solicitud.',
+      );
+
+      if (!confirmed) {
         return;
       }
+    }
 
-      setApprovingPayment(paymentId);
+    try {
+      setProcessingPayment({ id: paymentId, action: status });
       setError('');
 
-      await updatePaymentStatus(paymentId, 'APPROVED');
+      await updatePaymentStatus(paymentId, status);
 
       const [updated, updatedPayments, rankingData] =
         await Promise.all([
@@ -209,17 +278,19 @@ export default function AdminTournamentDetailPage() {
       setRanking(rankingData);
     } catch (error) {
       console.error(
-        'Error aprobando pago:',
+        'Error actualizando pago:',
         error,
       );
 
       setError(
         error instanceof Error
           ? error.message
-          : 'No fue posible aprobar el pago.',
+          : status === 'REJECTED'
+            ? 'No fue posible rechazar el pago.'
+            : 'No fue posible aprobar el pago.',
       );
     } finally {
-      setApprovingPayment(null);
+      setProcessingPayment(null);
     }
   }
 
@@ -598,19 +669,47 @@ export default function AdminTournamentDetailPage() {
                 )}
 
                 {!!prizes.winners?.length && (
-                  <div className="mt-6 space-y-2">
+                  <div id="valor-ganadores" className="mt-6 space-y-2">
                     <h3 className="font-bold">
                       {prizes.finalized ? 'Ganadores oficiales' : 'Valor de cada ganador'}
                     </h3>
                     <p className="text-sm text-slate-400">
                       Cada puesto reparte su premio entre quienes lo comparten. Esta lista solo se ve en administración.
                     </p>
-                    {prizes.winners.map((winner, index) => (
+                    <RankingPages
+                      page={currentWinnerPage}
+                      pageCount={winnerPageCount}
+                      total={winners.length}
+                      onPageChange={openWinnerPage}
+                    />
+                    {visibleWinners.map((winner, index) => (
                       <div key={`${winner.entryId ?? winner.userId}-${winner.position}-${index}`} className="flex flex-wrap justify-between gap-3 rounded-xl bg-slate-950/60 p-4 text-sm">
-                        <span>
-                          Puesto {winner.position}: {winner.name}
-                          {' '}({winner.points} puntos)
-                        </span>
+                        <div>
+                          <p>
+                            Puesto {winner.position}: {winner.name}
+                            {' '}({winner.points} puntos)
+                          </p>
+                          <p className="mt-1 text-slate-300">
+                            Celular: {winner.phone ?? "Sin celular registrado"}
+                          </p>
+                          {winner.paid && (
+                            <p className="mt-1 font-bold text-emerald-300">
+                              Pago registrado{winner.paidAt
+                                ? ` el ${new Date(winner.paidAt).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Bogota" })}`
+                                : ""}
+                            </p>
+                          )}
+                          {winner.phone && (
+                            <a
+                              href={`https://wa.me/${winner.phone.replace(/\D/g, "")}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-1 inline-block font-bold text-red-400 hover:text-red-300"
+                            >
+                              Escribir por WhatsApp
+                            </a>
+                          )}
+                        </div>
                         <strong>
                           {winner.amountCOP.toLocaleString('es-CO', {
                             style: 'currency',
@@ -620,6 +719,12 @@ export default function AdminTournamentDetailPage() {
                         </strong>
                       </div>
                     ))}
+                    <RankingPages
+                      page={currentWinnerPage}
+                      pageCount={winnerPageCount}
+                      total={winners.length}
+                      onPageChange={openWinnerPage}
+                    />
                   </div>
                 )}
               </>
@@ -636,7 +741,7 @@ export default function AdminTournamentDetailPage() {
             ) : (
               <div className="mt-6 space-y-4">
                 <p className="text-sm text-amber-200">
-                  Antes de cerrar, los 10 partidos deben estar puntuados,
+                  Antes de cerrar, los partidos deben estar puntuados,
                   el torneo finalizado y todos los pagos conciliados.
                   El servidor mantiene la operación bloqueada hasta
                   completar la validación final.
@@ -732,77 +837,130 @@ export default function AdminTournamentDetailPage() {
                   </p>
 
                   <h2 className="mt-1 text-2xl font-black">
-                    Jugadores inscritos
+                    Personas inscritas
                   </h2>
                 </div>
 
                 <span className="rounded-full bg-white/5 px-3 py-1 text-sm text-slate-300">
-                  {slips.length}
+                  {inscribed.length}
                 </span>
               </div>
 
               <p className="mt-3 text-sm text-slate-400">
-                Cada pronóstico del mismo jugador aparece por separado, con su propio pago.
+                Listado de quienes se inscribieron. Un pronóstico con pago rechazado deja de aparecer.
               </p>
 
               <div className="mt-6 space-y-3">
-                {slips.length === 0 ? (
+                <RankingPages
+                  page={currentSlipPage}
+                  pageCount={slipPageCount}
+                  total={inscribed.length}
+                  onPageChange={setSlipPage}
+                />
+                {inscribed.length === 0 ? (
                   <div className="rounded-xl bg-slate-950/50 p-6 text-center text-slate-400">
-                    Todavía no hay participantes.
+                    Todavía no hay personas inscritas.
                   </div>
                 ) : (
-                  slips.map((slip) => (
+                  visibleInscribed.map(({ participant, predictions }) => (
                       <div
-                        key={slip.key}
-                        className="flex flex-col gap-4 rounded-2xl bg-slate-950/50 p-4 sm:flex-row sm:items-center sm:justify-between"
+                        key={participant.id}
+                        className="rounded-2xl bg-slate-950/50 p-4"
                       >
                         <div className="min-w-0">
                           <p className="truncate font-bold text-white">
-                            {slip.name}
+                            {participant.user.name}
                           </p>
-
                           <p className="truncate text-sm text-slate-500">
-                            {slip.email}
+                            {participant.user.email}
                           </p>
                         </div>
 
-                        <div className="flex shrink-0 items-center gap-3">
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-bold ${
-                              slip.paid
-                                ? 'bg-green-500/15 text-green-400'
-                                : slip.payment?.status === 'REJECTED'
-                                  ? 'bg-red-500/15 text-red-400'
-                                  : 'bg-yellow-500/15 text-yellow-400'
-                            }`}
-                          >
-                            {slip.paid
-                              ? 'PAGADO'
-                              : slip.payment?.status === 'REJECTED'
-                                ? 'RECHAZADO'
-                                : slip.payment?.status === 'PENDING'
-                                  ? 'PENDIENTE'
-                                  : 'SIN PAGO'}
-                          </span>
+                        {predictions.length === 0 ? (
+                          <p className="mt-3 text-sm text-slate-400">
+                            Sin pronóstico activo
+                          </p>
+                        ) : (
+                          <div className="mt-3 space-y-2">
+                            {predictions.map((slip) => (
+                              <div
+                                key={slip.key}
+                                className="flex flex-col gap-3 rounded-xl bg-slate-900/80 p-3 sm:flex-row sm:items-center sm:justify-between"
+                              >
+                                <p className="text-sm font-semibold text-slate-200">
+                                  {predictions.length > 1
+                                    ? `Pronóstico ${slip.slipNumber}`
+                                    : 'Pronóstico'}
+                                </p>
+                                <div className="flex shrink-0 flex-wrap items-center gap-3">
+                                  <span
+                                    className={`rounded-full px-3 py-1 text-xs font-bold ${
+                                      slip.paid
+                                        ? 'bg-green-500/15 text-green-400'
+                                        : 'bg-yellow-500/15 text-yellow-400'
+                                    }`}
+                                  >
+                                    {slip.paid
+                                      ? 'PAGADO'
+                                      : slip.payment?.status === 'PENDING'
+                                        ? 'PENDIENTE'
+                                        : 'SIN PAGO'}
+                                  </span>
 
-                          {slip.payment?.status === 'PENDING' && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleApprovePayment(slip.payment!.id)
-                              }
-                              disabled={approvingPayment === slip.payment.id}
-                              className="rounded-lg bg-green-600 px-3 py-2 text-xs font-black text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {approvingPayment === slip.payment.id
-                                ? 'Aprobando...'
-                                : 'Aprobar pago'}
-                            </button>
-                          )}
-                        </div>
+                                  {slip.payment?.status === 'PENDING' && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handlePaymentDecision(
+                                            slip.payment!.id,
+                                            'APPROVED',
+                                          )
+                                        }
+                                        disabled={
+                                          processingPayment?.id === slip.payment.id
+                                        }
+                                        className="rounded-lg bg-green-600 px-3 py-2 text-xs font-black text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        {processingPayment?.id === slip.payment.id &&
+                                        processingPayment.action === 'APPROVED'
+                                          ? 'Aprobando...'
+                                          : 'Aprobar pago'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handlePaymentDecision(
+                                            slip.payment!.id,
+                                            'REJECTED',
+                                          )
+                                        }
+                                        disabled={
+                                          processingPayment?.id === slip.payment.id
+                                        }
+                                        className="rounded-lg bg-red-600 px-3 py-2 text-xs font-black text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        {processingPayment?.id === slip.payment.id &&
+                                        processingPayment.action === 'REJECTED'
+                                          ? 'Rechazando...'
+                                          : 'Rechazar'}
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))
                 )}
+                <RankingPages
+                  page={currentSlipPage}
+                  pageCount={slipPageCount}
+                  total={inscribed.length}
+                  onPageChange={setSlipPage}
+                />
               </div>
             </section>
 
@@ -833,6 +991,12 @@ export default function AdminTournamentDetailPage() {
               </div>
 
               <div className="mt-6 space-y-3">
+                <RankingPages
+                  page={currentRankingPage}
+                  pageCount={rankingPageCount}
+                  total={ranking.length}
+                  onPageChange={setRankingPage}
+                />
                 {pendingSlips.length > 0 && (
                   <div className="space-y-3">
                     <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
@@ -864,9 +1028,7 @@ export default function AdminTournamentDetailPage() {
                     Todavía no hay puntos registrados.
                   </div>
                 ) : (
-                  ranking
-                    .slice(0, 5)
-                    .map((entry) => (
+                  visibleRanking.map((entry) => (
                       <div
                         key={entry.id}
                         className="flex items-center gap-4 rounded-2xl bg-slate-950/50 p-4"
@@ -898,6 +1060,12 @@ export default function AdminTournamentDetailPage() {
                       </div>
                     ))
                 )}
+                <RankingPages
+                  page={currentRankingPage}
+                  pageCount={rankingPageCount}
+                  total={ranking.length}
+                  onPageChange={setRankingPage}
+                />
               </div>
             </section>
           </div>

@@ -3,13 +3,19 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
+
+import PhoneField from "@/components/PhoneField";
+import { DEFAULT_COUNTRY_ISO } from "@/lib/country-codes";
+import { composePhone } from "@/lib/phone";
 
 export default function RegisterPage() {
   const router = useRouter();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [countryIso, setCountryIso] = useState(DEFAULT_COUNTRY_ISO);
+  const [national, setNational] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [accepted, setAccepted] = useState(false);
@@ -25,8 +31,9 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!/^3\d{9}$/.test(phone)) {
-      setError("Ingresa un celular colombiano válido de 10 dígitos.");
+    const contactPhone = composePhone(countryIso, national);
+    if (!contactPhone) {
+      setError("Elige el país y escribe el celular, por ejemplo 300 123 4567.");
       return;
     }
 
@@ -65,7 +72,7 @@ export default function RegisterPage() {
           body: JSON.stringify({
             name: name.trim(),
             email: email.trim().toLowerCase(),
-            phone: `+57${phone}`,
+            phone: contactPhone,
             acceptRules: accepted,
             password,
           }),
@@ -113,12 +120,21 @@ export default function RegisterPage() {
           ← Volver al inicio
         </Link>
 
-        <h1 className="mt-7 text-3xl font-black">
+        <Image
+          src="/logos/totalgol-card.jpg"
+          alt="Total Gol"
+          width={928}
+          height={656}
+          priority
+          className="mt-7 h-36 w-auto rounded-2xl"
+        />
+
+        <h1 className="mt-5 text-3xl font-black">
           Crea tu cuenta
         </h1>
 
         <p className="mt-2 text-slate-400">
-          Únete a GolPro y prepárate para participar
+          Únete a Total Gol y prepárate para participar
           en las competencias de fútbol.
         </p>
 
@@ -163,37 +179,23 @@ export default function RegisterPage() {
             />
           </div>
 
-          <div>
-            <label htmlFor="phone" className="mb-2 block text-sm">
+          <fieldset>
+            <legend className="mb-2 block text-sm">
               Celular de contacto
-            </label>
-            <div className="flex gap-2">
-              <span className="flex items-center rounded-xl border border-slate-700 bg-slate-800 px-4 text-white">
-                +57
-              </span>
-              <input
-                id="phone"
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel-national"
-                required
-                pattern="3[0-9]{9}"
-                maxLength={10}
-                value={phone}
-                onChange={(event) =>
-                  setPhone(
-                    event.target.value.replace(/\D/g, "").slice(0, 10)
-                  )
-                }
-                placeholder="3001234567"
-                className={inputClass}
-              />
-            </div>
+            </legend>
+            <PhoneField
+              id="phone"
+              countryIso={countryIso}
+              national={national}
+              onCountryIso={setCountryIso}
+              onNational={setNational}
+            />
             <p className="mt-2 text-xs text-slate-400">
-              Lo usaremos para comunicaciones sobre tu participación
-              y para contactarte si resultas ganador.
+              Elige el código de tu país y escribe el número. Lo usaremos
+              para comunicaciones sobre tu participación y para contactarte
+              si resultas ganador.
             </p>
-          </div>
+          </fieldset>
 
           <div>
             <label htmlFor="password" className="mb-2 block text-sm">

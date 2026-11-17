@@ -7,6 +7,13 @@ import {
 } from "@nestjs/common";
 
 import { PrismaService } from "../prisma/prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import { FootballApiService } from "../football-api/football-api.service";
+import {
+  isAvailableKickoff,
+  isBoardFixture,
+  isSeniorNationalTeamLeague,
+} from "../football-api/first-division";
 
 import { CreateTournamentDto } from "./dto/create-tournament.dto";
 
@@ -14,7 +21,11 @@ import { UpdateTournamentDto } from "./dto/update-tournament.dto";
 
 @Injectable()
 export class TournamentsService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications?: NotificationsService,
+    private readonly football?: FootballApiService,
+  ) { }
 
   // ============================================================
   // CREAR TORNEO
@@ -95,29 +106,17 @@ export class TournamentsService {
   }
 
   async getUpcomingBoard() {
-    const matches = await this.prisma.match.findMany({
-      where: {
-        finished: false,
-        date: { gt: new Date() },
-      },
-      select: {
-        id: true,
-        date: true,
-        leagueId: true,
-        homeTeam: { select: { name: true } },
-        awayTeam: { select: { name: true } },
-        league: { select: { name: true, country: true } },
-        matchday: {
-          select: {
-            id: true,
-            season: true,
-            roundName: true,
-            number: true,
-          },
-        },
-      },
-      orderBy: { date: 'asc' },
-    });
+    const week = bogotaWeek(new Date());
+    const fixtures = this.football
+      ? await this.football
+          .previewWeekFixtures(week.from, week.to, week.start, week.end)
+          .catch(() => {
+            console.warn(
+              '[Total Gol] No se pudieron cargar los partidos de la semana.',
+            );
+            return [] as any[];
+          })
+      : [];
 
     const championships = new Map<string, {
       leagueId: number;
@@ -133,48 +132,85 @@ export class TournamentsService {
           date: string;
           homeTeam: string;
           awayTeam: string;
+          playable: boolean;
         }>;
       }>;
     }>();
 
-    for (const match of matches) {
-      const key = `${match.leagueId}:${match.matchday.season}`;
+    const now = Date.now();
+
+    for (const fixture of fixtures) {
+      const apiId = Number(fixture?.fixture?.id);
+      const leagueId = Number(fixture?.league?.id);
+      const season = Number(fixture?.league?.season);
+      const kickoff = new Date(fixture?.fixture?.date);
+      const homeTeam = String(fixture?.teams?.home?.name || '').trim();
+      const awayTeam = String(fixture?.teams?.away?.name || '').trim();
+
+      const status = String(fixture?.fixture?.status?.short || '');
+
+      if (
+        !Number.isSafeInteger(apiId) ||
+        !Number.isSafeInteger(leagueId) ||
+        !Number.isSafeInteger(season) ||
+        Number.isNaN(kickoff.getTime()) ||
+        !homeTeam ||
+        !awayTeam ||
+        !isBoardFixture(leagueId, homeTeam, awayTeam) ||
+        !isAvailableKickoff(kickoff, status, now)
+      ) {
+        continue;
+      }
+
+      const key = `${leagueId}:${season}`;
       let championship = championships.get(key);
 
       if (!championship) {
         championship = {
-          leagueId: match.leagueId,
-          season: match.matchday.season,
-          name: match.league.name,
-          country: match.league.country,
+          leagueId,
+          season,
+          name: String(fixture?.league?.name || `Liga ${leagueId}`),
+          country: String(fixture?.league?.country || 'Desconocido'),
           rounds: [],
         };
         championships.set(key, championship);
       }
 
+      const roundName = String(fixture?.league?.round || 'Fecha');
       let round = championship.rounds.find(
-        (item) => item.id === match.matchday.id,
+        (item) => item.roundName === roundName,
       );
 
       if (!round) {
         round = {
-          id: match.matchday.id,
-          roundName: match.matchday.roundName,
-          number: match.matchday.number,
+          id: championship.rounds.length + 1,
+          roundName,
+          number: null,
           matches: [],
         };
         championship.rounds.push(round);
       }
 
       round.matches.push({
-        id: match.id,
-        date: match.date.toISOString(),
-        homeTeam: match.homeTeam.name,
-        awayTeam: match.awayTeam.name,
+        id: apiId,
+        date: kickoff.toISOString(),
+        homeTeam,
+        awayTeam,
+        playable: true,
       });
     }
 
+    for (const championship of championships.values()) {
+      for (const round of championship.rounds) {
+        round.matches.sort((a, b) => a.date.localeCompare(b.date));
+      }
+    }
+
     return {
+      week: {
+        from: week.from,
+        to: week.to,
+      },
       championships: [...championships.values()]
         .map((championship) => ({
           ...championship,
@@ -184,6 +220,7 @@ export class TournamentsService {
           ),
         }))
         .sort((a, b) =>
+          nationalTeamRank(a.leagueId) - nationalTeamRank(b.leagueId) ||
           b.upcoming - a.upcoming ||
           a.name.localeCompare(b.name, 'es'),
         ),
@@ -227,42 +264,61 @@ export class TournamentsService {
     }
 
     if (
-      matchIds.length !== 10 ||
+      matchIds.length < 1 ||
       matchIds.some((id) => !Number.isSafeInteger(id) || id <= 0)
     ) {
       throw new BadRequestException(
-        'Debes seleccionar exactamente 10 partidos.',
+        'Selecciona al menos un partido.',
       );
     }
 
-    const matches = await this.prisma.match.findMany({
-      where: { id: { in: matchIds } },
-      include: { matchday: true },
-    });
-
-    if (matches.length !== 10) {
+    if (!this.football) {
       throw new BadRequestException(
-        'Uno o más partidos ya no están disponibles.',
+        'No se pudo consultar el calendario.',
       );
     }
 
+    const week = bogotaWeek(new Date());
+    const fixtures = await this.football.findPreviewedFixtures(
+      matchIds,
+      week.from,
+      week.to,
+      week.start,
+      week.end,
+    );
+    const kickoffs = fixtures.map((fixture) =>
+      new Date(fixture.fixture.date).getTime(),
+    );
     const now = Date.now();
+
     if (
-      matches.some(
-        (match) => match.finished || match.date.getTime() <= now,
+      fixtures.some(
+        (fixture) =>
+          !isBoardFixture(
+            Number(fixture?.league?.id),
+            String(fixture?.teams?.home?.name || ''),
+            String(fixture?.teams?.away?.name || ''),
+          ),
       )
+    ) {
+      throw new BadRequestException(
+        'Solo puedes armar la polla con partidos de primera división, amistosos de selecciones o eliminatorias de mayores.',
+      );
+    }
+
+    if (
+      fixtures.some((fixture, index) => {
+        const status = String(fixture?.fixture?.status?.short || '');
+        return !isAvailableKickoff(new Date(kickoffs[index]), status, now);
+      })
     ) {
       throw new BadRequestException(
         'Todos los partidos seleccionados deben ser futuros.',
       );
     }
 
-    const earliest = Math.min(
-      ...matches.map((match) => match.date.getTime()),
-    );
-    const latest = Math.max(
-      ...matches.map((match) => match.date.getTime()),
-    );
+    const earliest = Math.min(...kickoffs);
+    const latest = Math.max(...kickoffs);
     const registrationEndsAt = earliest - 60 * 60 * 1000;
 
     if (registrationEndsAt <= now + 60 * 1000) {
@@ -271,6 +327,14 @@ export class TournamentsService {
       );
     }
 
+    const matches = await this.football.saveSelectedFixtures(
+      matchIds,
+      week.from,
+      week.to,
+      week.start,
+      week.end,
+    );
+    const storedIds = matches.map((match) => match.id);
     const leagueCounts = new Map<number, number>();
     for (const match of matches) {
       leagueCounts.set(
@@ -305,7 +369,7 @@ export class TournamentsService {
       });
 
       await tx.tournamentMatch.createMany({
-        data: matchIds.map((matchId, index) => ({
+        data: storedIds.map((matchId, index) => ({
           tournamentId: created.id,
           matchId,
           position: index + 1,
@@ -353,7 +417,7 @@ export class TournamentsService {
         where: { tournamentId: tournament.id },
       }),
       this.prisma.pollEntry.count({
-        where: { tournamentId: tournament.id },
+        where: visiblePredictionsWhere(tournament.id),
       }),
     ]);
 
@@ -501,7 +565,7 @@ export class TournamentsService {
         where: { tournamentId: tournament.id },
       }),
       this.prisma.pollEntry.count({
-        where: { tournamentId: tournament.id },
+        where: visiblePredictionsWhere(tournament.id),
       }),
     ]);
 
@@ -704,7 +768,7 @@ export class TournamentsService {
 
 
     const predictionsCount = await this.prisma.pollEntry.count({
-      where: { tournamentId },
+      where: visiblePredictionsWhere(tournamentId),
     });
 
     return {
@@ -732,7 +796,7 @@ export class TournamentsService {
   async getMyEntries(tournamentId: number, userId: number) {
     const entries = await this.prisma.pollEntry.findMany({
       where: {
-        tournamentId,
+        ...visiblePredictionsWhere(tournamentId),
         userId,
       },
       orderBy: { id: 'asc' },
@@ -1178,21 +1242,26 @@ export class TournamentsService {
       throw new NotFoundException("La Polla no existe.");
     }
 
-    if (matchIds.length !== 10) {
+    const uniqueMatchIds = [...new Set(matchIds)];
+
+    if (
+      uniqueMatchIds.length < 1 ||
+      uniqueMatchIds.some((id) => !Number.isSafeInteger(id) || id <= 0)
+    ) {
       throw new BadRequestException(
-        "La Polla debe tener exactamente 10 partidos.",
+        "Selecciona al menos un partido.",
       );
     }
 
     const matches = await this.prisma.match.findMany({
       where: {
         id: {
-          in: matchIds,
+          in: uniqueMatchIds,
         },
       },
     });
 
-    if (matches.length !== 10) {
+    if (matches.length !== uniqueMatchIds.length) {
       throw new BadRequestException(
         "Uno o más partidos ya no están disponibles.",
       );
@@ -1258,7 +1327,7 @@ export class TournamentsService {
       });
 
       await tx.tournamentMatch.createMany({
-        data: matchIds.map((matchId, index) => ({
+        data: uniqueMatchIds.map((matchId, index) => ({
           tournamentId,
           matchId,
           position: index + 1,
@@ -1308,6 +1377,13 @@ export class TournamentsService {
               },
             },
             matchday: true,
+            league: {
+              select: {
+                id: true,
+                name: true,
+                country: true,
+              },
+            },
           },
         },
       },
@@ -1337,27 +1413,38 @@ export class TournamentsService {
   // ============================================================
 
   async getPrizeHistory() {
-    const closures = await this.prisma.tournamentPrizeClosure.findMany({
-      orderBy: { closedAt: 'desc' },
+    const tournaments = await this.prisma.tournament.findMany({
+      where: {
+        registrationEndsAt: { lte: new Date() },
+      },
+      orderBy: { startsAt: 'desc' },
       take: 30,
       select: {
-        tournamentId: true,
-        closedAt: true,
-        tournament: {
+        id: true,
+        name: true,
+        season: true,
+        startsAt: true,
+        prizeClosure: {
+          select: { closedAt: true },
+        },
+        tournamentMatches: {
+          orderBy: { position: 'asc' },
+          take: 1,
           select: {
-            id: true,
-            name: true,
-            season: true,
+            match: { select: { date: true } },
           },
         },
       },
     });
 
-    return closures.map((entry) => ({
-      id: entry.tournament.id,
-      name: entry.tournament.name,
-      season: entry.tournament.season,
-      closedAt: entry.closedAt,
+    return tournaments.map((tournament) => ({
+      id: tournament.id,
+      name: tournament.name,
+      season: tournament.season,
+      closedAt: tournament.prizeClosure?.closedAt ?? null,
+      startsAt: tournament.startsAt,
+      firstMatchAt:
+        tournament.tournamentMatches[0]?.match.date ?? tournament.startsAt,
     }));
   }
 
@@ -1405,6 +1492,7 @@ export class TournamentsService {
       provisional: boolean;
       entryId: number | null;
       paid: boolean;
+      paidAt: Date | null;
     }> = [];
 
     const payouts = await this.prisma.prizePayout.findMany({
@@ -1413,20 +1501,21 @@ export class TournamentsService {
         tournamentId: true,
         entryId: true,
         amountCOP: true,
+        paidAt: true,
       },
     });
 
-    const prizeWasPaid = (
+    const findPayout = (
       tournamentId: number,
       entryId: number | null,
       amountCOP: number,
-    ) => payouts.some((payout) =>
+    ) => payouts.find((payout) =>
       payout.tournamentId === tournamentId &&
       (
         (entryId !== null && payout.entryId === entryId) ||
         (entryId === null && payout.entryId === null && payout.amountCOP === amountCOP)
       ),
-    );
+    ) ?? null;
 
     for (const closure of closures) {
       if (!Array.isArray(closure.winners)) continue;
@@ -1461,6 +1550,13 @@ export class TournamentsService {
           continue;
         }
 
+        const entryId = typeof winner.entryId === 'number' ? winner.entryId : null;
+        const payout = findPayout(
+          closure.tournament.id,
+          entryId,
+          winner.amountCOP as number,
+        );
+
         history.push({
           tournamentId: closure.tournament.id,
           tournamentName: closure.tournament.name,
@@ -1470,12 +1566,9 @@ export class TournamentsService {
           points: winner.points as number,
           amountCOP: winner.amountCOP as number,
           provisional: false,
-          entryId: typeof winner.entryId === 'number' ? winner.entryId : null,
-          paid: prizeWasPaid(
-            closure.tournament.id,
-            typeof winner.entryId === 'number' ? winner.entryId : null,
-            winner.amountCOP as number,
-          ),
+          entryId,
+          paid: payout !== null,
+          paidAt: payout?.paidAt ?? null,
         });
       }
     }
@@ -1541,6 +1634,7 @@ export class TournamentsService {
         }
 
         const entryId = typeof winner.entryId === 'number' ? winner.entryId : null;
+        const payout = findPayout(tournament.id, entryId, amountCOP);
 
         history.push({
           tournamentId: tournament.id,
@@ -1552,7 +1646,8 @@ export class TournamentsService {
           amountCOP,
           provisional: true,
           entryId,
-          paid: prizeWasPaid(tournament.id, entryId, amountCOP),
+          paid: payout !== null,
+          paidAt: payout?.paidAt ?? null,
         });
       }
     }
@@ -1680,7 +1775,12 @@ export class TournamentsService {
         return false;
       }
       return (item as { entryId?: number }).entryId === entryId;
-    }) as { userId?: number; amountCOP?: number; entryId?: number } | undefined;
+    }) as {
+      userId?: number;
+      amountCOP?: number;
+      entryId?: number;
+      position?: number;
+    } | undefined;
 
     const userId = winner?.userId;
     const amountCOP = winner?.amountCOP;
@@ -1721,6 +1821,24 @@ export class TournamentsService {
       },
     });
 
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { name: true },
+    });
+
+    if (this.notifications) {
+      await this.notifications.notifyPrizePaid({
+        userId,
+        tournamentId,
+        entryId,
+        payoutId: saved.id,
+        tournamentName: tournament?.name ?? 'Polla',
+        position: typeof winner.position === 'number' ? winner.position : null,
+        amountCOP: saved.amountCOP,
+        paidAt: saved.paidAt,
+      });
+    }
+
     return {
       paid: true,
       alreadyPaid: false,
@@ -1738,7 +1856,7 @@ export class TournamentsService {
 
     const payouts = await this.prisma.prizePayout.findMany({
       where: { tournamentId },
-      select: { entryId: true, userId: true, amountCOP: true },
+      select: { entryId: true, userId: true, amountCOP: true, paidAt: true },
     });
 
     return winners.map((item) => {
@@ -1751,17 +1869,62 @@ export class TournamentsService {
         userId?: number;
         amountCOP?: number;
       };
-      const paid = payouts.some((payout) =>
-        (typeof winner.entryId === 'number' && payout.entryId === winner.entryId) ||
+      const payout = payouts.find((itemPayout) =>
+        (typeof winner.entryId === 'number' && itemPayout.entryId === winner.entryId) ||
         (
           winner.entryId == null &&
-          payout.entryId == null &&
-          payout.userId === winner.userId &&
-          payout.amountCOP === winner.amountCOP
+          itemPayout.entryId == null &&
+          itemPayout.userId === winner.userId &&
+          itemPayout.amountCOP === winner.amountCOP
         ),
       );
 
-      return { ...winner, paid };
+      return {
+        ...winner,
+        paid: Boolean(payout),
+        paidAt: payout?.paidAt ?? null,
+      };
+    });
+  }
+
+  private async attachWinnerPhones(winners: unknown) {
+    if (!Array.isArray(winners) || winners.length === 0) {
+      return winners;
+    }
+
+    const userIds = [...new Set(
+      winners
+        .map((item) =>
+          item && typeof item === 'object' && !Array.isArray(item)
+            ? (item as { userId?: number }).userId
+            : undefined,
+        )
+        .filter((id): id is number =>
+          typeof id === 'number' && Number.isSafeInteger(id) && id > 0,
+        ),
+    )];
+
+    if (userIds.length === 0) {
+      return winners;
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, phone: true },
+    });
+    const phones = new Map(users.map((user) => [user.id, user.phone]));
+
+    return winners.map((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return item;
+      }
+
+      const userId = (item as { userId?: number }).userId;
+
+      return {
+        ...item,
+        phone: typeof userId === 'number' ? phones.get(userId) ?? null : null,
+      };
     });
   }
 
@@ -1794,7 +1957,9 @@ export class TournamentsService {
           third: closure.thirdCOP,
         },
         winners: audience === 'admin'
-          ? await this.annotateWinnerPayouts(tournamentId, closure.winners)
+          ? await this.attachWinnerPhones(
+              await this.annotateWinnerPayouts(tournamentId, closure.winners),
+            )
           : closure.winners,
         allocatedCOP: closure.allocatedCOP,
         undistributedCOP: closure.undistributedCOP,
@@ -1976,7 +2141,9 @@ export class TournamentsService {
         third: distribution.thirdCOP,
       },
       winners: audience === 'admin'
-        ? await this.annotateWinnerPayouts(tournamentId, winners)
+        ? await this.attachWinnerPhones(
+            await this.annotateWinnerPayouts(tournamentId, winners),
+          )
         : winners,
       allocatedCOP: winnersReady
         ? distribution.allocatedCOP
@@ -1986,4 +2153,57 @@ export class TournamentsService {
         : null,
     };
   }
+}
+
+function nationalTeamRank(leagueId: number) {
+  if (leagueId === 10) return 0;
+  if (isSeniorNationalTeamLeague(leagueId)) return 1;
+  return 2;
+}
+
+function bogotaWeek(now: Date) {
+  const timeZone = 'America/Bogota';
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+  }).format(now);
+  const index: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  const day = index[weekday] ?? 1;
+  const daysFromMonday = day === 0 ? 6 : day - 1;
+  const [year, month, date] = ymd.split('-').map(Number);
+  const monday = new Date(Date.UTC(year, month - 1, date - daysFromMonday));
+  const sunday = new Date(Date.UTC(year, month - 1, date - daysFromMonday + 6));
+  const from = monday.toISOString().slice(0, 10);
+  const to = sunday.toISOString().slice(0, 10);
+
+  return {
+    from,
+    to,
+    start: new Date(`${from}T05:00:00.000Z`),
+    end: new Date(Date.parse(`${to}T05:00:00.000Z`) + 24 * 60 * 60 * 1000),
+  };
+}
+
+function visiblePredictionsWhere(tournamentId: number) {
+  return {
+    tournamentId,
+    OR: [
+      { payments: { none: { status: 'REJECTED' } } },
+      { payments: { some: { status: { in: ['PENDING', 'APPROVED'] } } } },
+    ],
+  };
 }

@@ -67,9 +67,9 @@ export class PrizeClosureService {
           orderBy: { matchId: 'asc' },
         });
 
-        if (selected.length !== 10) {
+        if (selected.length < 1) {
           throw new BadRequestException(
-            'Se requieren exactamente 10 partidos seleccionados.',
+            'La Polla no tiene partidos seleccionados.',
           );
         }
 
@@ -99,7 +99,7 @@ export class PrizeClosureService {
         });
 
         if (
-          selectedNow.length !== 10 ||
+          selectedNow.length !== matchIds.length ||
           selectedNow.some(
             (item, index) => item.matchId !== matchIds[index],
           )

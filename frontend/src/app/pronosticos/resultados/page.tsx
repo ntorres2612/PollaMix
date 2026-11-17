@@ -11,11 +11,12 @@ import { useRouter } from "next/navigation";
 
 import PlayerClaimForm from "@/components/claims/PlayerClaimForm";
 import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
 import TeamLogo from "@/components/match/TeamLogo";
 
 import { getCurrentUser, logout } from "@/lib/auth";
 import { teamNameEs } from "@/lib/team-name";
+import { competitionLabel } from "@/lib/league-name";
+import { matchClock } from "@/lib/match-clock";
 
 import {
   getMyEntries,
@@ -100,6 +101,8 @@ export default function PredictionResultsPage() {
     setError,
   ] =
     useState("");
+
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     let active = true;
@@ -186,6 +189,24 @@ export default function PredictionResultsPage() {
     };
   }, [router, selectedTournamentId]);
 
+  useEffect(() => {
+    const clock = window.setInterval(() => setNow(Date.now()), 15000);
+
+    return () => window.clearInterval(clock);
+  }, []);
+
+  useEffect(() => {
+    if (!tournament) return;
+
+    const refresh = window.setInterval(() => {
+      void getPredictionMatches(tournament.id)
+        .then((selectedMatches) => setMatches(selectedMatches))
+        .catch(() => undefined);
+    }, 60000);
+
+    return () => window.clearInterval(refresh);
+  }, [tournament]);
+
   const finishedMatches =
     matches.filter(
       (match) =>
@@ -227,7 +248,6 @@ export default function PredictionResultsPage() {
           </p>
         </div>
 
-        <Footer />
       </main>
     );
   }
@@ -240,7 +260,7 @@ export default function PredictionResultsPage() {
         <div className="mx-auto max-w-5xl px-4 py-20">
           <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-10 text-center shadow-2xl">
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-400">
-              GolPro
+              Total Gol
             </p>
 
             <h1 className="mt-3 text-3xl font-black">
@@ -263,7 +283,6 @@ export default function PredictionResultsPage() {
           </div>
         </div>
 
-        <Footer />
       </main>
     );
   }
@@ -478,6 +497,8 @@ export default function PredictionResultsPage() {
                     match.awayScore !== null &&
                     match.awayScore !== undefined;
 
+                  const clock = matchClock(match, now);
+
                   return (
                     <article
                       key={match.id}
@@ -509,11 +530,28 @@ export default function PredictionResultsPage() {
                                 match.date,
                               )}
                             </p>
+                            {competitionLabel(
+                              match.league?.name || match.matchday?.tournament,
+                              match.league?.country,
+                              match.matchday?.roundName,
+                            ) && (
+                              <p className="mt-1 text-xs text-slate-400">
+                                {competitionLabel(
+                                  match.league?.name || match.matchday?.tournament,
+                                  match.league?.country,
+                                  match.matchday?.roundName,
+                                )}
+                              </p>
+                            )}
                           </div>
 
                         </div>
 
-                        {hasResult ? (
+                        {clock.phase === "live" ? (
+                          <span className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-bold text-red-300">
+                            En vivo{clock.minute ? ` · ${clock.minute}` : ""}
+                          </span>
+                        ) : clock.phase === "finished" ? (
                           <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-400">
                             Finalizado
                           </span>
@@ -553,18 +591,21 @@ export default function PredictionResultsPage() {
 
                         <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-3 text-center">
 
-                          {hasResult ? (
-                            <p className="text-2xl font-black text-white">
-                              {match.homeScore}
-                              <span className="mx-2 text-slate-600">
-                                -
-                              </span>
-                              {match.awayScore}
-                            </p>
-                          ) : (
+                          {clock.phase === "upcoming" ? (
                             <p className="font-bold text-slate-600">
                               -
                             </p>
+                          ) : (
+                            <>
+                              <p className="text-2xl font-black text-white">
+                                {clock.score ?? "–"}
+                              </p>
+                              {clock.minute && (
+                                <p className="mt-1 text-xs font-bold text-red-300">
+                                  {clock.minute}
+                                </p>
+                              )}
+                            </>
                           )}
 
                         </div>
@@ -639,7 +680,6 @@ export default function PredictionResultsPage() {
 
       </div>
 
-      <Footer />
     </main>
   );
 }

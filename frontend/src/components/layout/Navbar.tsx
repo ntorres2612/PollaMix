@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AuthUser, getCurrentUser, logout } from "@/lib/auth";
 import { getMyPrizes } from "@/lib/tournaments";
+import PrizeNotices from "./PrizeNotices";
 
 type NavItem = { href: string; label: string };
 
@@ -26,6 +27,7 @@ const playerLinks: NavItem[] = [
 // se encuentran dentro del detalle de cada torneo.
 const adminLinks: NavItem[] = [
   { href: "/admin/tournaments", label: "Administrar Pollas" },
+  { href: "/admin/pagos", label: "Abonos" },
 ];
 
 export default function Navbar() {
@@ -61,6 +63,10 @@ export default function Navbar() {
 
   const isAdmin = user?.role === "ADMIN";
   const isPlayer = user?.role === "PLAYER";
+  const visiblePublicLinks = (isAdmin
+    ? publicLinks.filter((item) => item.href !== "/clasificacion")
+    : publicLinks
+  ).filter((item) => user || item.href === "/" || item.href === "/reglas");
   const roleLinks = user
     ? [
         ...(isAdmin ? adminLinks : isPlayer ? playerLinks : []),
@@ -106,7 +112,7 @@ export default function Navbar() {
   return (
     <>
       <nav aria-label="Navegación principal" className="hidden items-center gap-1 xl:flex">
-        {publicLinks.map((item) => (
+        {visiblePublicLinks.map((item) => (
           <Link key={item.href} href={item.href} className={linkStyle(item.href)}
             aria-current={isActive(item.href) ? "page" : undefined}>
             {item.label}
@@ -136,6 +142,7 @@ export default function Navbar() {
 
         {user ? (
           <>
+            <PrizeNotices />
             {balanceLabel && (
               <Link href="/premios" className="ml-2 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-right hover:border-red-500">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Saldo</p>
@@ -159,6 +166,12 @@ export default function Navbar() {
         )}
       </nav>
 
+      {user && (
+        <div className="xl:hidden">
+          <PrizeNotices />
+        </div>
+      )}
+
       <button type="button" aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
         aria-controls="golpro-mobile-menu" aria-expanded={mobileOpen}
         onClick={() => setMobileOpen((open) => !open)}
@@ -169,7 +182,7 @@ export default function Navbar() {
       {mobileOpen && (
         <div id="golpro-mobile-menu" className="absolute left-4 right-4 top-[84px] z-[60] max-h-[calc(100vh-100px)] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl xl:hidden">
           <nav aria-label="Navegación móvil" className="flex flex-col gap-1">
-            {publicLinks.map((item) => (
+            {visiblePublicLinks.map((item) => (
               <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={linkStyle(item.href, true)}>{item.label}</Link>
             ))}
             {user && (

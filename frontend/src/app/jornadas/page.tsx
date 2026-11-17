@@ -2,18 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
-
 import { getCurrentUser } from "@/lib/auth";
+import GuestPitch from "@/components/home/GuestPitch";
 import {
   getCurrentTournament,
   getSelectedTournamentMatches,
   getTournamentMyStatus,
+  joinTournament,
 } from "@/lib/tournaments";
 import { ApiMatch } from "@/types/match";
 import { teamNameEs } from "@/lib/team-name";
+import { competitionLabel } from "@/lib/league-name";
+import { matchMomentLabel } from "@/lib/match-clock";
 
 interface Tournament {
   id: number;
@@ -40,6 +43,9 @@ interface TournamentStatus {
 }
 
 export default function JornadasPage() {
+  const router = useRouter();
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState("");
   const [tournament, setTournament] =
     useState<Tournament | null>(null);
 
@@ -49,8 +55,10 @@ export default function JornadasPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+  const [viewer, setViewer] = useState<ReturnType<typeof getCurrentUser> | undefined>(undefined);
 
-  const user = getCurrentUser();
+  const user = viewer ?? null;
 
   const canPlay = Boolean(
     user &&
@@ -59,6 +67,15 @@ export default function JornadasPage() {
   );
 
   useEffect(() => {
+    setViewer(getCurrentUser());
+  }, []);
+
+  useEffect(() => {
+    if (!viewer) {
+      if (viewer === null) setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     async function load() {
@@ -135,7 +152,39 @@ export default function JornadasPage() {
     return () => {
       cancelled = true;
     };
+  }, [viewer]);
+
+  useEffect(() => {
+    const clock = window.setInterval(() => setNow(Date.now()), 15000);
+
+    return () => window.clearInterval(clock);
   }, []);
+
+  useEffect(() => {
+    if (!tournament) return;
+
+    const refresh = window.setInterval(() => {
+      void getSelectedTournamentMatches(tournament.id)
+        .then((selectedMatches) => setMatches(selectedMatches))
+        .catch(() => undefined);
+    }, 60000);
+
+    return () => window.clearInterval(refresh);
+  }, [tournament]);
+
+  if (viewer === null) {
+    return (
+      <main className="min-h-screen bg-[#071321] text-white">
+        <Header />
+        <div className="pt-16">
+          <GuestPitch
+            title="Las jornadas están en tu cuenta"
+            lead="Inicia sesión para ver los partidos, los marcadores y el minuto de juego. Desde aquí solo te contamos cómo se participa."
+          />
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#071321] text-white">
@@ -144,7 +193,7 @@ export default function JornadasPage() {
       <div className="mx-auto max-w-7xl px-4 pb-16 pt-28 sm:px-6">
         <section className="mb-10">
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-400">
-            GolPro
+            Total Gol
           </p>
 
           <h1 className="mt-2 text-4xl font-black sm:text-5xl">
@@ -237,20 +286,39 @@ export default function JornadasPage() {
                 {user && !status?.isParticipant && (
                   <>
                     <h3 className="text-lg font-bold">
-                      Aún no estás inscrito en esta Polla
+                      Elige tu pronóstico
                     </h3>
 
                     <p className="mt-2 text-slate-400">
-                      Debes completar la inscripción antes
-                      de registrar tus pronósticos.
+                      Entras a los partidos disponibles, marcas
+                      Local, Empate o Visitante y al guardar se abre el pago.
                     </p>
 
-                    <Link
-                      href="/pago"
-                      className="mt-5 inline-flex rounded-xl bg-red-600 px-6 py-3 font-bold text-white transition hover:bg-red-500"
+                    <button
+                      type="button"
+                      disabled={joining}
+                      onClick={() => {
+                        if (!tournament || joining) return;
+                        setJoining(true);
+                        setJoinError("");
+                        void joinTournament(tournament.id)
+                          .then(() => router.push("/pronosticos"))
+                          .catch((err: unknown) => {
+                            setJoinError(
+                              err instanceof Error
+                                ? err.message
+                                : "No se pudo abrir los partidos.",
+                            );
+                          })
+                          .finally(() => setJoining(false));
+                      }}
+                      className="mt-5 inline-flex rounded-xl bg-red-600 px-6 py-3 font-bold text-white transition hover:bg-red-500 disabled:opacity-50"
                     >
-                      Inscribirme
-                    </Link>
+                      {joining ? "Abriendo partidos..." : "Participar"}
+                    </button>
+                    {joinError && (
+                      <p className="mt-3 text-sm text-red-300">{joinError}</p>
+                    )}
                   </>
                 )}
 
@@ -319,7 +387,15 @@ export default function JornadasPage() {
                   </p>
                 ) : (
                   <ul className="mt-4 divide-y divide-white/10">
-                    {matches.map((match) => (
+                    {matches.map((match) => {
+                      const competition = competitionLabel(
+                        match.league?.name || match.matchday?.tournament,
+                        match.league?.country,
+                        match.matchday?.roundName,
+                      );
+                      const result = matchMomentLabel(match, now);
+
+                      return (
                       <li
                         key={match.id}
                         className="flex flex-col gap-1 py-4 sm:flex-row sm:items-center sm:justify-between"
@@ -328,20 +404,11 @@ export default function JornadasPage() {
                           {teamNameEs(match.homeTeam.name)} vs {teamNameEs(match.awayTeam.name)}
                         </span>
                         <span className="text-sm text-slate-400">
-                          {match.finished && match.homeScore !== null && match.awayScore !== null
-                            ? `Final ${match.homeScore} - ${match.awayScore}`
-                            : `${match.matchday?.tournament || match.league?.name
-                                ? `${match.matchday?.tournament || match.league?.name} · `
-                                : ""}${new Date(match.date).toLocaleString("es-CO", {
-                                weekday: "short",
-                                day: "2-digit",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}`}
+                          {competition ? `${competition} · ${result}` : result}
                         </span>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -350,7 +417,6 @@ export default function JornadasPage() {
         )}
       </div>
 
-      <Footer />
     </main>
   );
 }

@@ -198,7 +198,7 @@ export default function AdminTournamentsPage() {
               </h2>
 
               <p className="mt-2 text-slate-400">
-                Abre una Polla, elige el campeonato y marca los 10 partidos.
+                Abre una Polla, elige el campeonato y marca los partidos.
               </p>
             </div>
           ) : (

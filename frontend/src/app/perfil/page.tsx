@@ -4,6 +4,9 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getToken } from "@/lib/auth";
+import PhoneField from "@/components/PhoneField";
+import { DEFAULT_COUNTRY_ISO } from "@/lib/country-codes";
+import { composePhone, splitPhone } from "@/lib/phone";
 
 type Profile = {
   id: number;
@@ -19,7 +22,8 @@ export default function ProfilePage() {
   const router = useRouter();
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [phone, setPhone] = useState("");
+  const [countryIso, setCountryIso] = useState(DEFAULT_COUNTRY_ISO);
+  const [national, setNational] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -70,11 +74,9 @@ export default function ProfilePage() {
 
         if (active) {
           setProfile(data);
-          setPhone(
-            data.phone?.startsWith("+57")
-              ? data.phone.slice(3)
-              : ""
-          );
+          const split = splitPhone(data.phone ?? "");
+          setCountryIso(split.iso);
+          setNational(split.national);
         }
       } catch (err) {
         if (active) {
@@ -99,8 +101,9 @@ export default function ProfilePage() {
     setError("");
     setSuccess("");
 
-    if (!/^3\d{9}$/.test(phone)) {
-      setError("Ingresa un celular colombiano válido de 10 dígitos.");
+    const contactPhone = composePhone(countryIso, national);
+    if (!contactPhone) {
+      setError("Elige el país y escribe el celular, por ejemplo 300 123 4567.");
       return;
     }
 
@@ -128,7 +131,7 @@ export default function ProfilePage() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ phone: `+57${phone}` }),
+          body: JSON.stringify({ phone: contactPhone }),
         }
       );
 
@@ -143,6 +146,9 @@ export default function ProfilePage() {
 
       const updated: Profile = await response.json();
       setProfile(updated);
+      const split = splitPhone(contactPhone, countryIso);
+      setCountryIso(split.iso);
+      setNational(split.national);
       setSuccess("Celular actualizado correctamente.");
     } catch (err) {
       setError(
@@ -208,42 +214,23 @@ export default function ProfilePage() {
                 </div>
 
                 <form onSubmit={save} className="mt-8 border-t border-slate-800 pt-7">
-                  <label
-                    htmlFor="profile-phone"
-                    className="mb-2 block text-sm font-semibold"
-                  >
-                    Celular de contacto
-                  </label>
-
-                  <div className="flex gap-2">
-                    <span className="flex items-center rounded-xl border border-slate-700 bg-slate-800 px-4">
-                      +57
-                    </span>
-                    <input
+                  <fieldset>
+                    <legend className="mb-2 block text-sm font-semibold">
+                      Celular de contacto
+                    </legend>
+                    <PhoneField
                       id="profile-phone"
-                      type="tel"
-                      inputMode="numeric"
-                      autoComplete="tel-national"
-                      required
-                      maxLength={10}
-                      pattern="3[0-9]{9}"
-                      value={phone}
-                      onChange={(event) =>
-                        setPhone(
-                          event.target.value
-                            .replace(/\D/g, "")
-                            .slice(0, 10)
-                        )
-                      }
-                      placeholder="3001234567"
-                      className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-red-500"
+                      countryIso={countryIso}
+                      national={national}
+                      onCountryIso={setCountryIso}
+                      onNational={setNational}
                     />
-                  </div>
+                  </fieldset>
 
                   <p className="mt-3 text-xs leading-5 text-slate-400">
-                    Este número es privado y se utilizará para
-                    comunicaciones relacionadas con el torneo
-                    y la entrega de premios.
+                    Elige el código de tu país y escribe el número. Este
+                    celular es privado y se utilizará para comunicaciones
+                    relacionadas con el torneo y la entrega de premios.
                   </p>
 
                   <button

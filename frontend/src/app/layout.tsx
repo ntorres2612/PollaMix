@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 import { PredictionProvider } from "@/context/PredictionContext";
+import Footer from "@/components/layout/Footer";
 import WhatsAppFloatingButton from "@/components/layout/WhatsAppFloatingButton";
 
 const geistSans = Geist({
@@ -17,9 +18,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GolPro",
+  title: "Total Gol",
   description:
-    "GolPro - Pronósticos y resultados de fútbol",
+    "Total Gol - Pronósticos y resultados de fútbol",
+  icons: {
+    icon: [
+      { url: "/icons/totalgol.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: "/icons/totalgol-apple.png",
+  },
 };
 
 export default function RootLayout({
@@ -35,6 +42,7 @@ export default function RootLayout({
       <body className="min-h-full">
         <PredictionProvider>
           {children}
+          <Footer />
           <WhatsAppFloatingButton />
         </PredictionProvider>
       </body>

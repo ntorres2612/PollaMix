@@ -56,11 +56,18 @@ describe('Validación de cierre definitivo GolPro', () => {
     expect(validatePrizeClosure(input).ready).toBe(false);
   });
 
-  it('exige diez partidos seleccionados', () => {
+  it('exige al menos un partido', () => {
     const input = validInput();
-    input.matches.pop();
+    input.matches = [];
 
     expect(validatePrizeClosure(input).ready).toBe(false);
+  });
+
+  it('acepta la cantidad de partidos que eligió el administrador', () => {
+    const input = validInput();
+    input.matches = input.matches.slice(0, 6);
+
+    expect(validatePrizeClosure(input).ready).toBe(true);
   });
 
   it('rechaza importes inferiores a la inscripción', () => {

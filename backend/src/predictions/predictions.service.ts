@@ -30,10 +30,10 @@ export class PredictionsService {
       !Number.isSafeInteger(tournamentId) ||
       tournamentId <= 0 ||
       !Array.isArray(dto.predictions) ||
-      dto.predictions.length !== 10
+      dto.predictions.length < 1
     ) {
       throw new BadRequestException(
-        'Debes enviar exactamente 10 pronósticos válidos.',
+        'Debes enviar el pronóstico de cada partido de la Polla.',
       );
     }
 
@@ -48,7 +48,7 @@ export class PredictionsService {
     );
 
     if (
-      new Set(matchIds).size !== 10 ||
+      new Set(matchIds).size !== dto.predictions.length ||
       matchIds.some(
         (id) => !Number.isSafeInteger(id) || id <= 0,
       ) ||
@@ -61,7 +61,7 @@ export class PredictionsService {
       )
     ) {
       throw new BadRequestException(
-        'Los 10 partidos deben ser únicos y tener una selección válida.',
+        'Cada partido debe tener una selección válida y no puede repetirse.',
       );
     }
 
@@ -167,7 +167,7 @@ export class PredictionsService {
           });
 
         if (
-          tournamentMatches.length !== 10 ||
+          tournamentMatches.length !== matchIds.length ||
           tournamentMatches.some(
             (item) =>
               !matchIds.includes(item.matchId) ||
@@ -199,9 +199,9 @@ export class PredictionsService {
           })),
         });
 
-        if (result.count !== 10) {
+        if (result.count !== matchIds.length) {
           throw new BadRequestException(
-            'No fue posible registrar los 10 pronósticos.',
+            'No fue posible registrar los pronósticos.',
           );
         }
 

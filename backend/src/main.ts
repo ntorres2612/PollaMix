@@ -12,7 +12,7 @@ async function bootstrap() {
 
   if (!jwtSecret || !jwtSecret.trim()) {
     throw new Error(
-      'JWT_SECRET es obligatorio para iniciar GolPro.',
+      'JWT_SECRET es obligatorio para iniciar Total Gol.',
     );
   }
 
@@ -48,8 +48,8 @@ async function bootstrap() {
 
   if (process.env.ENABLE_SWAGGER === 'true') {
     const config = new DocumentBuilder()
-      .setTitle('GolPro API')
-      .setDescription('API oficial de GolPro')
+      .setTitle('Total Gol API')
+      .setDescription('API oficial de Total Gol')
       .setVersion('1.0.0')
       .addBearerAuth()
       .build();

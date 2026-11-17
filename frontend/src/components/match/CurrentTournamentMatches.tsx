@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import MatchTable from '@/components/match/MatchTable';
 import TournamentRanking from '@/components/tournaments/TournamentRanking';
@@ -46,6 +47,7 @@ function formatCountdown(milliseconds: number): string {
 }
 
 export default function CurrentTournamentMatches() {
+  const router = useRouter();
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [status, setStatus] = useState<TournamentParticipationStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,16 +98,14 @@ export default function CurrentTournamentMatches() {
   }, [currentUser?.id]);
 
   async function handleJoin() {
-    if (!tournament || !currentUser || joining || status?.isParticipant) return;
+    if (!tournament || !currentUser || joining) return;
     setJoining(true);
     setJoinError('');
     try {
-      await joinTournament(tournament.id);
-      const updatedStatus = await getTournamentMyStatus(tournament.id);
-      setStatus(updatedStatus);
-      if (!updatedStatus.isParticipant) {
-        setJoinError('La inscripción se envió, pero no se pudo confirmar su estado. Recarga la página antes de intentarlo nuevamente.');
+      if (!status?.isParticipant) {
+        await joinTournament(tournament.id);
       }
+      router.push('/pronosticos');
     } catch (err) {
       setJoinError(err instanceof Error ? err.message : 'No se pudo registrar la inscripción.');
     } finally {
@@ -157,7 +157,7 @@ export default function CurrentTournamentMatches() {
           <div className="border-b border-white/10 bg-gradient-to-r from-red-950/70 to-slate-900 px-6 py-8 sm:px-10">
             <p className="text-sm font-bold uppercase tracking-widest text-red-400">Pollas NT · TorresTech</p>
             <h2 className="mt-2 text-3xl font-black text-white sm:text-4xl">{tournament.name}</h2>
-            <p className="mt-3 text-slate-300">Pronostica los resultados de Liga MX y compite por los premios.</p>
+            <p className="mt-3 text-slate-300">Pronostica los resultados globales y compite por los premios.</p>
           </div>
 
           <div className="grid gap-4 p-6 sm:grid-cols-3 sm:p-10">
@@ -203,7 +203,16 @@ export default function CurrentTournamentMatches() {
               )}
 
               {currentUser && status?.isParticipant && !canPredict && (
-                <p className="font-semibold text-yellow-400">Inscripción registrada · Pago pendiente</p>
+                <div>
+                  <p className="font-semibold text-yellow-400">Inscripción registrada · Pago pendiente</p>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/pronosticos')}
+                    className="mt-4 rounded-xl bg-red-600 px-8 py-4 font-black text-white transition hover:bg-red-500"
+                  >
+                    Participar
+                  </button>
+                </div>
               )}
 
               {currentUser && !status?.isParticipant && registrationOpen && (
@@ -241,7 +250,7 @@ export default function CurrentTournamentMatches() {
         </div>
       </section>
 
-      {status?.predictionsCloseAt != null ? (
+      {canPredict && status?.predictionsCloseAt != null ? (
         <MatchTable
           tournamentId={tournament.id}
           canPredict={canPredict}
@@ -249,7 +258,7 @@ export default function CurrentTournamentMatches() {
           predictionsSubmittedAt={status.predictionsSubmittedAt}
           onSubmitted={refreshParticipationStatus}
         />
-      ) : (
+      ) : status?.predictionsCloseAt != null ? null : (
         <section className="mx-auto max-w-6xl px-4">
           <div className="rounded-2xl border border-white/10 bg-slate-900 p-6">
             <p className="mb-4 text-slate-300">Esta Polla utiliza el sistema histórico de marcadores.</p>

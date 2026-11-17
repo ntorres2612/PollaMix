@@ -50,9 +50,9 @@ export function validatePrizeClosure(
     errors.push('La inscripción COP no es válida.');
   }
 
-  if (input.matches.length !== 10) {
+  if (input.matches.length < 1) {
     errors.push(
-      'El torneo debe tener exactamente 10 partidos seleccionados.',
+      'La Polla no tiene partidos seleccionados.',
     );
   }
 

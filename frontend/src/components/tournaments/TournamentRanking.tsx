@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react';
 
+import RankingPages, {
+  RANKING_PAGE_SIZE,
+} from '@/components/ui/RankingPages';
 import {
   getTournamentRanking,
   TournamentRankingEntry,
@@ -17,6 +20,7 @@ export default function TournamentRanking({
   currentUserId,
 }: TournamentRankingProps) {
   const [ranking, setRanking] = useState<TournamentRankingEntry[]>([]);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -42,8 +46,26 @@ export default function TournamentRanking({
       }
     }
 
+    setPage(1);
     loadRanking();
   }, [tournamentId]);
+
+  const pageCount = Math.max(
+    1,
+    Math.ceil(ranking.length / RANKING_PAGE_SIZE),
+  );
+  const currentPage = Math.min(page, pageCount);
+  const visibleRanking = ranking.slice(
+    (currentPage - 1) * RANKING_PAGE_SIZE,
+    currentPage * RANKING_PAGE_SIZE,
+  );
+  const myIndex = currentUserId
+    ? ranking.findIndex(
+        (player) => currentUserId === (player.userId ?? player.id),
+      )
+    : -1;
+  const myPage =
+    myIndex >= 0 ? Math.floor(myIndex / RANKING_PAGE_SIZE) + 1 : null;
 
   if (loading) {
     return (
@@ -75,7 +97,24 @@ export default function TournamentRanking({
         <h2 className="mt-1 text-2xl font-black text-white">
           Ranking de la Polla
         </h2>
+
+        {myPage && myPage !== currentPage && (
+          <button
+            type="button"
+            onClick={() => setPage(myPage)}
+            className="mt-2 text-sm font-bold text-red-400 hover:text-red-300"
+          >
+            Tu posición está en la hoja {myPage}
+          </button>
+        )}
       </div>
+
+      <RankingPages
+        page={currentPage}
+        pageCount={pageCount}
+        total={ranking.length}
+        onPageChange={setPage}
+      />
 
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70 shadow-2xl">
         <div className="grid grid-cols-[70px_1fr_100px] border-b border-white/10 bg-white/5 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -85,7 +124,7 @@ export default function TournamentRanking({
         </div>
 
         <div className="divide-y divide-white/5">
-          {ranking.map((player) => {
+          {visibleRanking.map((player) => {
             const isCurrentUser =
               currentUserId === (player.userId ?? player.id);
 
@@ -140,6 +179,13 @@ export default function TournamentRanking({
           })}
         </div>
       </div>
+
+      <RankingPages
+        page={currentPage}
+        pageCount={pageCount}
+        total={ranking.length}
+        onPageChange={setPage}
+      />
     </section>
   );
 }

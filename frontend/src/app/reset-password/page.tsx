@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 const API = (
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
@@ -77,9 +78,13 @@ export default function ResetPasswordPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-5 py-12 text-white">
       <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8">
-        <p className="text-sm font-bold uppercase tracking-widest text-red-400">
-          GolPro
-        </p>
+        <Image
+          src="/logos/totalgol-card.jpg"
+          alt="Total Gol"
+          width={928}
+          height={656}
+          className="h-32 w-auto rounded-2xl"
+        />
         <h1 className="mt-3 text-3xl font-black">
           Nueva contraseña
         </h1>

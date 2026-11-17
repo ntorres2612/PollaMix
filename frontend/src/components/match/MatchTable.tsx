@@ -18,6 +18,7 @@ import {
   submitPredictions,
   type PredictionSelection,
 } from "@/lib/predictions";
+import { roundNameEs } from "@/lib/league-name";
 
 interface MatchTableProps {
   tournamentId: number;
@@ -152,7 +153,7 @@ export default function MatchTable({
         const week =
           match.matchday?.number != null
             ? `Jornada ${match.matchday.number}`
-            : match.matchday?.roundName ||
+            : roundNameEs(match.matchday?.roundName || "") ||
             "Próximos partidos";
 
         if (!groups[week]) {
@@ -196,8 +197,8 @@ export default function MatchTable({
 
   const readyToSubmit =
     canEdit &&
-    matches.length === 10 &&
-    selectedCount === 10;
+    matches.length > 0 &&
+    selectedCount === matches.length;
 
   function handleSelectionChange(
     matchId: number,
@@ -293,6 +294,7 @@ export default function MatchTable({
 
         <PredictionProgress
           tournamentId={tournamentId}
+          totalMatches={matches.length}
           predictionsSubmittedAt={submittedAt}
         />
 
@@ -323,7 +325,7 @@ export default function MatchTable({
               <p className="text-lg font-bold text-white">
                 {isConfirmed
                   ? "Pronósticos confirmados"
-                  : "Selecciona los resultados de los 10 partidos"}
+                  : "Selecciona el resultado de cada partido"}
               </p>
 
               <p className="mt-2 text-sm text-slate-400">
@@ -376,7 +378,7 @@ export default function MatchTable({
             {!isConfirmed && canPredict && (
               <div className="rounded-2xl border border-white/10 bg-slate-900 p-6 text-center">
                 <p className="mb-3 text-lg font-black">
-                  {selectedCount} / 10 pronósticos
+                  {selectedCount} / {matches.length} pronósticos
                 </p>
 
                 <p className="mb-6 text-sm text-slate-400">
@@ -390,7 +392,7 @@ export default function MatchTable({
                   onClick={() => setConfirming(true)}
                   className="rounded-xl bg-red-600 px-8 py-4 font-black text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Confirmar mis 10 pronósticos
+                  Confirmar pronósticos
                 </button>
               </div>
             )}

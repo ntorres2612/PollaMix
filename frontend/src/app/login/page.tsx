@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 
 import { login } from '@/lib/auth';
 
@@ -51,9 +52,14 @@ export default function LoginPage() {
 
           <div className="text-center mb-8">
 
-            <h1 className="text-3xl font-black">
-              GolPro
-            </h1>
+            <Image
+              src="/logos/totalgol-card.jpg"
+              alt="Total Gol"
+              width={928}
+              height={656}
+              priority
+              className="mx-auto h-36 w-auto rounded-2xl"
+            />
 
             <p className="text-slate-400 mt-2">
               Inicia sesión en tu cuenta

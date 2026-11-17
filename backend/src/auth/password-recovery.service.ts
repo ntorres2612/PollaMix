@@ -116,7 +116,7 @@ export class PasswordRecoveryService {
       await transporter.sendMail({
         from: config.from,
         to: user.email,
-        subject: 'GolPro - Recuperación de contraseña',
+        subject: 'Total Gol - Recuperación de contraseña',
         text:
           'Recibimos una solicitud para cambiar tu contraseña.\n\n' +
           'Abre este enlace (válido por 15 minutos):\n' +

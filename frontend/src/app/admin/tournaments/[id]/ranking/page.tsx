@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import Container from '@/components/ui/Container';
+import RankingPages, {
+  RANKING_PAGE_SIZE,
+} from '@/components/ui/RankingPages';
 import { getCurrentUser, isAuthenticated } from '@/lib/auth';
 import {
   getTournament,
@@ -24,6 +27,7 @@ export default function AdminTournamentRankingPage() {
   const [ranking, setRanking] =
     useState<TournamentRankingEntry[]>([]);
 
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -72,6 +76,16 @@ export default function AdminTournamentRankingPage() {
     loadRanking();
   }, [router, tournamentId]);
 
+  const pageCount = Math.max(
+    1,
+    Math.ceil(ranking.length / RANKING_PAGE_SIZE),
+  );
+  const currentPage = Math.min(page, pageCount);
+  const visibleRanking = ranking.slice(
+    (currentPage - 1) * RANKING_PAGE_SIZE,
+    currentPage * RANKING_PAGE_SIZE,
+  );
+
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 py-10 text-white">
@@ -117,12 +131,19 @@ export default function AdminTournamentRankingPage() {
               </div>
 
               <div className="space-y-3">
+                <RankingPages
+                  page={currentPage}
+                  pageCount={pageCount}
+                  total={ranking.length}
+                  onPageChange={setPage}
+                />
+
                 {ranking.length === 0 ? (
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center text-slate-400">
                     Todavía no hay puntos registrados.
                   </div>
                 ) : (
-                  ranking.map((entry) => (
+                  visibleRanking.map((entry) => (
                     <div
                       key={entry.id}
                       className="flex items-center gap-5 rounded-2xl border border-white/10 bg-white/5 p-5"
@@ -149,6 +170,13 @@ export default function AdminTournamentRankingPage() {
                     </div>
                   ))
                 )}
+
+                <RankingPages
+                  page={currentPage}
+                  pageCount={pageCount}
+                  total={ranking.length}
+                  onPageChange={setPage}
+                />
               </div>
             </>
           )}

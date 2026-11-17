@@ -16,6 +16,7 @@ import { CurrentUser } from './auth/decorators/current-user.decorator';
 import { TournamentsModule } from './tournaments/tournaments.module';
 import { PaymentsModule } from './payments/payments.module';
 import { UsersModule } from './users/users.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 
@@ -36,6 +37,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     TournamentsModule,
     PaymentsModule,
     UsersModule,
+    NotificationsModule,
 
   ],
 })

@@ -4,6 +4,7 @@ services:
     restart: unless-stopped
     environment:
       PRD_DOMAIN: ${PRD_DOMAIN:?Configure PRD_DOMAIN}
+      QA_DOMAIN: ${QA_DOMAIN:?Configure QA_DOMAIN}
     ports:
       - "80:80"
       - "443:443"
@@ -15,8 +16,11 @@ services:
     depends_on:
       - frontend-prd
       - backend-prd
+      - frontend-qa
+      - backend-qa
     networks:
       - prd_app
+      - qa_app
 
 volumes:
   caddy_data:

@@ -29,6 +29,10 @@ export interface ApiMatch {
   awayScore: number | null;
   finished: boolean;
   scoredAt: string | null;
+  statusShort?: string | null;
+  elapsed?: number | null;
+  extraTime?: number | null;
+  liveAt?: string | null;
   createdAt: string;
   homeTeamId: number;
   awayTeamId: number;

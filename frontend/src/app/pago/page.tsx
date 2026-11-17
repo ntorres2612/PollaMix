@@ -13,9 +13,10 @@ import {
 import { useRouter } from "next/navigation";
 
 import BreBPaymentCard from "@/components/payments/BreBPaymentCard";
+import RankingPages, {
+  RANKING_PAGE_SIZE,
+} from "@/components/ui/RankingPages";
 import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
-
 import {
   createPayment,
   getCurrentPlayerTournament,
@@ -119,6 +120,11 @@ export default function PaymentPage() {
   ] =
     useState("");
 
+  const [
+    historyPage,
+    setHistoryPage,
+  ] = useState(1);
+
 
 
 
@@ -161,13 +167,8 @@ export default function PaymentPage() {
             tournamentStatus,
           );
 
-          setPayments(
-            myPayments.filter(
-              (payment) =>
-                payment.tournamentId ===
-                currentTournament.id,
-            ),
-          );
+          setPayments(myPayments);
+          setHistoryPage(1);
 
         } catch (err) {
 
@@ -241,20 +242,31 @@ export default function PaymentPage() {
     );
 
   const paymentHistory = useMemo(() => {
+    const counters = new Map<number, number>();
     const chronological = [...payments].sort(
       (left, right) => left.id - right.id,
     );
 
     return chronological
-      .map((payment, index) => ({
-        ...payment,
-        number: index + 1,
-      }))
+      .map((payment) => {
+        const number = (counters.get(payment.tournamentId) ?? 0) + 1;
+        counters.set(payment.tournamentId, number);
+        return { ...payment, number };
+      })
       .reverse();
   }, [payments]);
 
   const pendingPayments = paymentHistory.filter(
     (payment) => payment.status === "PENDING",
+  );
+  const historyPageCount = Math.max(
+    1,
+    Math.ceil(paymentHistory.length / RANKING_PAGE_SIZE),
+  );
+  const currentHistoryPage = Math.min(historyPage, historyPageCount);
+  const visibleHistory = paymentHistory.slice(
+    (currentHistoryPage - 1) * RANKING_PAGE_SIZE,
+    currentHistoryPage * RANKING_PAGE_SIZE,
   );
 
   async function handleJoin() {
@@ -371,8 +383,6 @@ export default function PaymentPage() {
 
         </div>
 
-        <Footer />
-
       </main>
     );
   }
@@ -389,7 +399,7 @@ export default function PaymentPage() {
           <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-10 text-center shadow-2xl">
 
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-400">
-              GolPro
+              Total Gol
             </p>
 
             <h1 className="mt-3 text-3xl font-black">
@@ -410,8 +420,6 @@ export default function PaymentPage() {
           </div>
 
         </div>
-
-        <Footer />
 
       </main>
     );
@@ -585,12 +593,52 @@ export default function PaymentPage() {
                   <BreBPaymentCard
                     amount={tournament.inscription}
                     currency={tournament.currency}
+                    conceptCodes={pendingPayments.map(
+                      (payment) => `GP${payment.id}`,
+                    )}
                   />
 
                 </div>
 
               </section>
 
+            )}
+
+            {latestPayment && (
+              <section className="rounded-3xl border border-emerald-500/30 bg-emerald-950/20 p-6 shadow-2xl sm:p-8">
+                <p className="text-sm font-bold uppercase tracking-wider text-emerald-300">
+                  Último pago realizado
+                </p>
+                <h2 className="mt-2 text-2xl font-black text-white">
+                  {latestPayment.tournament?.name ?? "Polla"} · Pronóstico {
+                    paymentHistory.find((payment) => payment.id === latestPayment.id)?.number
+                    ?? ""
+                  }
+                </h2>
+                <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
+                  <p className="text-slate-200">
+                    <span className="block text-xs text-slate-400">Valor</span>
+                    {formatCurrency(latestPayment.amount, latestPayment.currency)}
+                  </p>
+                  <p className="break-all text-slate-200">
+                    <span className="block text-xs text-slate-400">Referencia</span>
+                    {latestPayment.reference}
+                  </p>
+                  <p className="text-slate-200">
+                    <span className="block text-xs text-slate-400">Fecha</span>
+                    {formatDate(latestPayment.paidAt || latestPayment.createdAt)}
+                  </p>
+                </div>
+                <p className="mt-4 text-sm font-bold text-emerald-300">
+                  {latestPayment.status === "APPROVED"
+                    ? "Pagado"
+                    : latestPayment.status === "REJECTED"
+                      ? "Rechazado"
+                      : latestPayment.status === "CANCELLED"
+                        ? "Cancelado"
+                        : "Pendiente"}
+                </p>
+              </section>
             )}
 
             <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-2xl sm:p-8">
@@ -605,7 +653,14 @@ export default function PaymentPage() {
 
               <div className="mt-6 space-y-3">
 
-                {paymentHistory.map((payment) => (
+                <RankingPages
+                  page={currentHistoryPage}
+                  pageCount={historyPageCount}
+                  total={paymentHistory.length}
+                  onPageChange={setHistoryPage}
+                />
+
+                {visibleHistory.map((payment) => (
 
                   <article
                     key={payment.id}
@@ -615,7 +670,9 @@ export default function PaymentPage() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
 
                       <p className="font-black text-white">
+                        {payment.tournament?.name ? `${payment.tournament.name} · ` : ""}
                         Pronóstico {payment.number}
+                        {payment.id === latestPayment?.id ? " · Último pago" : ""}
                       </p>
 
                       <span className={
@@ -659,6 +716,13 @@ export default function PaymentPage() {
                   </article>
 
                 ))}
+
+                <RankingPages
+                  page={currentHistoryPage}
+                  pageCount={historyPageCount}
+                  total={paymentHistory.length}
+                  onPageChange={setHistoryPage}
+                />
 
               </div>
 
@@ -764,8 +828,6 @@ export default function PaymentPage() {
         )}
 
       </div>
-
-      <Footer />
 
     </main>
   );

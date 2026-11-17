@@ -39,6 +39,8 @@ model User {
   noCorrectionResolutions TournamentClaimNoCorrectionResolution[]
   prizePayouts PrizePayout[] @relation("PrizeWinner")
   prizePayoutsRegistered PrizePayout[] @relation("PrizePayer")
+  notifications Notification[]
+  mailboxConnections MailboxConnection[]
 }
 
 model League {
@@ -178,10 +180,14 @@ model Match {
   apiId Int @unique
 
   date      DateTime
-  homeScore Int?
-  awayScore Int?
-  finished  Boolean   @default(false)
-  scoredAt  DateTime?
+  homeScore   Int?
+  awayScore   Int?
+  finished    Boolean   @default(false)
+  scoredAt    DateTime?
+  statusShort String?
+  elapsed     Int?
+  extraTime   Int?
+  liveAt      DateTime?
 
   createdAt DateTime @default(now())
 
@@ -249,6 +255,8 @@ model Payment {
 
   entryId Int?
   entry   PollEntry? @relation(fields: [entryId], references: [id])
+
+  incomingTransfer IncomingTransfer?
 
   @@index([userId])
   @@index([tournamentId])
@@ -325,6 +333,57 @@ model PrizePayout {
   @@unique([tournamentId, entryId])
   @@index([userId])
   @@index([tournamentId])
+}
+
+model Notification {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind         String
+  title        String
+  body         String
+  tournamentId Int?
+  entryId      Int?
+  payoutId     Int?      @unique
+  incomingId   Int?
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@unique([userId, incomingId])
+  @@index([userId, createdAt])
+}
+
+// Buzón que el administrador conecta para leer avisos de abonos.
+// El token queda cifrado. GolPro solo lee el correo, no mueve dinero.
+model MailboxConnection {
+  id            Int      @id @default(autoincrement())
+  email         String
+  refreshToken  String
+  connectedById Int
+  connectedBy   User     @relation(fields: [connectedById], references: [id], onDelete: Restrict)
+  lastSyncAt    DateTime?
+  lastError     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Aviso de que entró dinero, leído del correo del banco.
+model IncomingTransfer {
+  id            Int      @id @default(autoincrement())
+  externalId    String   @unique
+  amountCOP     Int
+  payerName     String?
+  concept       String?
+  bankReference String?  @unique
+  fromDomain    String
+  receivedAt    DateTime
+  authenticated Boolean  @default(false)
+  status        String
+  paymentId     Int?     @unique
+  payment       Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+
+  @@index([status, createdAt])
 }
 
 

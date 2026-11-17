@@ -11,7 +11,10 @@ services:
       DATABASE_URL: ${PRD_DATABASE_URL:?Configure PRD_DATABASE_URL}
       JWT_SECRET: ${PRD_JWT_SECRET:?Configure PRD_JWT_SECRET}
       FRONTEND_URL: ${PRD_FRONTEND_URL:?Configure PRD_FRONTEND_URL}
-      POLLAMIX_DISABLE_SYNC: "1"
+      FOOTBALL_API_KEY: ${FOOTBALL_API_KEY:?Configure FOOTBALL_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${PRD_GOOGLE_REDIRECT_URI:-}
       SMTP_HOST: ${SMTP_HOST:?Configure SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT:?Configure SMTP_PORT}
       SMTP_USER: ${SMTP_USER:?Configure SMTP_USER}
@@ -32,6 +35,8 @@ services:
       dockerfile: Dockerfile.prod
       args:
         NEXT_PUBLIC_API_URL: ${PRD_API_URL:?Configure PRD_API_URL}
+        NEXT_PUBLIC_WHATSAPP_NUMBER: ${NEXT_PUBLIC_WHATSAPP_NUMBER:?Configure NEXT_PUBLIC_WHATSAPP_NUMBER}
+        NEXT_PUBLIC_QR_SRC: /payments/golpro-nequi-qr.png
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -53,7 +58,12 @@ services:
       DATABASE_URL: ${QA_DATABASE_URL:?Configure QA_DATABASE_URL}
       JWT_SECRET: ${QA_JWT_SECRET:?Configure QA_JWT_SECRET}
       FRONTEND_URL: ${QA_FRONTEND_URL:?Configure QA_FRONTEND_URL}
-      POLLAMIX_DISABLE_SYNC: "1"
+      FOOTBALL_API_KEY: ${FOOTBALL_API_KEY:?Configure FOOTBALL_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${QA_GOOGLE_REDIRECT_URI:-}
+      PAYMENT_TEST_AMOUNT: "100"
+      PAYMENT_TEST_AMOUNT_IN_PRODUCTION: "true"
       SMTP_HOST: ${SMTP_HOST:?Configure SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT:?Configure SMTP_PORT}
       SMTP_USER: ${SMTP_USER:?Configure SMTP_USER}
@@ -74,6 +84,8 @@ services:
       dockerfile: Dockerfile.prod
       args:
         NEXT_PUBLIC_API_URL: ${QA_API_URL:?Configure QA_API_URL}
+        NEXT_PUBLIC_WHATSAPP_NUMBER: ${NEXT_PUBLIC_WHATSAPP_NUMBER:?Configure NEXT_PUBLIC_WHATSAPP_NUMBER}
+        NEXT_PUBLIC_QR_SRC: /payments/golpro-nequi-qr-qa.png
     restart: unless-stopped
     environment:
       NODE_ENV: production

@@ -9,17 +9,22 @@ import { PrismaService } from '../prisma/prisma.service';
 import { lockMatchForPrizeSafeUpdate } from '../tournaments/prizes/match-prize-lock';
 import { FootballApiClient } from './football-api.client';
 import { ScoringService } from '../predictions/scoring/scoring.service';
-import { EspnFootballService } from './espn/espn-football.service';
 
 @Injectable()
 export class FootballApiService {
   private syncInProgress = false;
+  private weekImportKey = '';
+  private weekImportAt = 0;
+  private weekImportJob: Promise<void> | null = null;
+  private weekPreviewKey = '';
+  private weekPreviewAt = 0;
+  private weekPreviewFixtures: any[] = [];
+  private weekPreviewJob: Promise<any[]> | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly client: FootballApiClient,
     private readonly scoringService: ScoringService,
-    private readonly espnFootballService: EspnFootballService,
   ) {}
 
   @Cron('*/10 * * * *', {
@@ -90,23 +95,51 @@ export class FootballApiService {
         };
       }
 
-      const competitions =
-        Array.from(
-          new Map(
-            tournaments.map(
-              (tournament) => [
-                `${tournament.leagueId}-${tournament.season}`,
-                {
-                  leagueId:
-                    tournament.leagueId,
+      const selected =
+        await this.prisma.tournamentMatch.findMany({
+          where: {
+            tournamentId: {
+              in: tournaments.map(
+                (tournament) => tournament.id,
+              ),
+            },
+            match: {
+              finished: false,
+            },
+          },
+          select: {
+            match: {
+              select: {
+                apiId: true,
+                date: true,
+              },
+            },
+          },
+        });
 
-                  season:
-                    tournament.season,
-                },
-              ],
-            ),
-          ).values(),
+      const pending = selected
+        .map((row) => row.match)
+        .filter(
+          (match) =>
+            Number.isSafeInteger(match.apiId) &&
+            match.apiId > 0,
         );
+
+      const horizon =
+        now.getTime() + 2 * 60 * 60 * 1000;
+
+      const due = pending.filter(
+        (match) => match.date.getTime() <= horizon,
+      );
+
+      const byDate = new Map<string, number[]>();
+
+      for (const match of due) {
+        const day = match.date.toISOString().slice(0, 10);
+        const ids = byDate.get(day) ?? [];
+        ids.push(match.apiId);
+        byDate.set(day, ids);
+      }
 
       console.log(
         '[CRON] Pollas activas:',
@@ -114,56 +147,58 @@ export class FootballApiService {
       );
 
       console.log(
-        '[CRON] Combinaciones liga/temporada:',
-        competitions.length,
+        '[CRON] Partidos pendientes en juego:',
+        due.length,
       );
 
       const results: Array<{
-        leagueId: number;
-        season: number;
+        date: string;
         success: boolean;
         result?: any;
         error?: string;
       }> = [];
 
-      for (
-        const competition of
-          competitions
-      ) {
+      for (const [date, apiIds] of byDate) {
         try {
           const result =
             await this.updateResults(
-              competition.leagueId,
-              competition.season,
+              0,
+              0,
+              { date, apiIds },
             );
 
+          console.log(
+            '[CRON] Marcadores del',
+            date + ':',
+            result.updated,
+            'actualizados,',
+            result.scored,
+            'puntuados.',
+          );
+
           results.push({
-            leagueId:
-              competition.leagueId,
-
-            season:
-              competition.season,
-
+            date,
             success: true,
             result,
           });
         } catch (
           error
         ) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : String(error);
+
+          console.warn(
+            '[CRON] No se pudieron actualizar los marcadores del',
+            date + '.',
+            message,
+          );
+
           results.push({
-            leagueId:
-              competition.leagueId,
-
-            season:
-              competition.season,
-
+            date,
             success: false,
-
-            error:
-              error instanceof
-              Error
-                ? error.message
-                : String(error),
+            error: message,
           });
         }
       }
@@ -174,8 +209,7 @@ export class FootballApiService {
         tournamentsFound:
           tournaments.length,
 
-        competitions:
-          competitions.length,
+        matches: due.length,
 
         results,
 
@@ -498,7 +532,7 @@ export class FootballApiService {
       ) {
         skipped++;
         console.warn(
-          `[GolPro] Partido ${fixtureId}: marcador ` +
+          `[Total Gol] Partido ${fixtureId}: marcador ` +
           `reglamentario inválido para estado ${status}. ` +
           'Se omite la actualización.'
         );
@@ -783,30 +817,20 @@ export class FootballApiService {
   async updateResults(
     leagueId: number,
     season: number,
+    scope?: {
+      date: string;
+      apiIds: number[];
+    },
   ) {
-    /**
-     * IMPORTANTE:
-     *
-     * API-Sports Free no permite consultar
-     * Liga MX 2026.
-     *
-     * Para Liga MX 2026 usamos ESPN.
-     */
-    if (
-      leagueId === 262 &&
-      season === 2026
-    ) {
-      return this.espnFootballService
-        .importUpcomingMatches();
-    }
-
     const response =
       await this.client.get(
         '/fixtures',
-        {
-          league: leagueId,
-          season,
-        },
+        scope
+          ? { date: scope.date }
+          : {
+              league: leagueId,
+              season,
+            },
       );
 
     if (
@@ -854,6 +878,9 @@ export class FootballApiService {
     let updated = 0;
     let scored = 0;
     let ignored = 0;
+    const wanted = scope
+      ? new Set(scope.apiIds)
+      : null;
 
     for (
       const fixture of
@@ -863,9 +890,10 @@ export class FootballApiService {
         fixture.fixture?.id;
 
       if (
-        !fixtureId
+        !fixtureId ||
+        (wanted && !wanted.has(fixtureId))
       ) {
-        ignored++;
+        if (!fixtureId) ignored++;
         continue;
       }
 
@@ -918,7 +946,7 @@ export class FootballApiService {
         (homeScore === null || awayScore === null)
       ) {
         console.warn(
-          `[GolPro] Partido ${fixtureId}: marcador ` +
+          `[Total Gol] Partido ${fixtureId}: marcador ` +
           `reglamentario inválido para estado ${status}. ` +
           'Se omite la actualización.'
         );
@@ -931,6 +959,8 @@ export class FootballApiService {
               fixture.fixture.date,
             )
           : existingMatch.date;
+
+      const live = this.readLiveClock(fixture);
 
       const committedScoring = await this.prisma.$transaction(async (tx) => {
       await lockMatchForPrizeSafeUpdate(tx, existingMatch.id);
@@ -948,6 +978,10 @@ export class FootballApiService {
             homeScore,
             awayScore,
             finished,
+            statusShort: live.statusShort,
+            elapsed: live.elapsed,
+            extraTime: live.extraTime,
+            liveAt: live.liveAt,
           },
         });
 
@@ -966,7 +1000,7 @@ export class FootballApiService {
 
       }
       return finished && homeScore !== null && awayScore !== null;
-      }, { timeout: 20000 });
+      }, { timeout: 120000 });
       updated++;
       if (committedScoring) scored++;
 
@@ -982,6 +1016,63 @@ export class FootballApiService {
       leagueId,
       season,
     };
+  }
+
+  private readLiveClock(fixture: any): {
+    statusShort: string | null;
+    elapsed: number | null;
+    extraTime: number | null;
+    liveAt: Date | null;
+  } {
+    const rawStatus = fixture?.fixture?.status?.short;
+    const statusShort =
+      typeof rawStatus === 'string' &&
+      rawStatus.trim().length > 0 &&
+      rawStatus.trim().length <= 8
+        ? rawStatus.trim().toUpperCase()
+        : null;
+
+    const elapsed = this.boundedMinute(
+      fixture?.fixture?.status?.elapsed,
+      130,
+    );
+    const extraTime = this.boundedMinute(
+      fixture?.fixture?.status?.extra,
+      20,
+    );
+    const inPlay = new Set([
+      '1H',
+      'HT',
+      '2H',
+      'ET',
+      'BT',
+      'P',
+      'LIVE',
+      'INT',
+      'SUSP',
+    ]);
+
+    return {
+      statusShort,
+      elapsed,
+      extraTime,
+      liveAt:
+        statusShort && inPlay.has(statusShort)
+          ? new Date()
+          : null,
+    };
+  }
+
+  private boundedMinute(
+    value: unknown,
+    max: number,
+  ): number | null {
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) &&
+      value >= 0 &&
+      value <= max
+      ? value
+      : null;
   }
 
   private parseRound(
@@ -1109,6 +1200,214 @@ export class FootballApiService {
       month <= 12
       ? 'Apertura'
       : 'Clausura';
+  }
+
+  async previewWeekFixtures(
+    from: string,
+    to: string,
+    start: Date,
+    end: Date,
+  ) {
+    const key = `${from}:${to}`;
+    if (
+      this.weekPreviewKey === key &&
+      Date.now() - this.weekPreviewAt < 10 * 60 * 1000
+    ) {
+      return this.weekPreviewFixtures;
+    }
+    if (this.weekPreviewJob) {
+      return this.weekPreviewJob;
+    }
+
+    this.weekPreviewJob = this.collectWeekFixtures(from, to, start, end)
+      .then((fixtures) => {
+        if (!fixtures) return [];
+        this.weekPreviewKey = key;
+        this.weekPreviewAt = Date.now();
+        this.weekPreviewFixtures = fixtures;
+        return fixtures;
+      })
+      .finally(() => {
+        this.weekPreviewJob = null;
+      });
+
+    return this.weekPreviewJob;
+  }
+
+  async findPreviewedFixtures(
+    apiIds: number[],
+    from: string,
+    to: string,
+    start: Date,
+    end: Date,
+  ) {
+    const preview = await this.previewWeekFixtures(from, to, start, end);
+    const byApi = new Map<number, any>();
+
+    for (const fixture of preview) {
+      const id = Number(fixture?.fixture?.id);
+      if (Number.isSafeInteger(id)) byApi.set(id, fixture);
+    }
+
+    const chosen = apiIds.map((id) => byApi.get(id));
+    if (chosen.some((fixture) => !fixture)) {
+      throw new BadRequestException(
+        'Uno o más partidos ya no están disponibles.',
+      );
+    }
+
+    return chosen as any[];
+  }
+
+  async saveSelectedFixtures(
+    apiIds: number[],
+    from: string,
+    to: string,
+    start: Date,
+    end: Date,
+  ) {
+    const chosen = await this.findPreviewedFixtures(
+      apiIds,
+      from,
+      to,
+      start,
+      end,
+    );
+
+    for (const fixture of chosen) {
+      const saved = await this.saveAvailableFixture(fixture);
+      if (saved === 'skipped') {
+        throw new BadRequestException(
+          'Uno o más partidos ya no están disponibles.',
+        );
+      }
+    }
+
+    const stored = await this.prisma.match.findMany({
+      where: { apiId: { in: apiIds } },
+      include: { matchday: true },
+    });
+    const storedByApi = new Map(stored.map((match) => [match.apiId, match]));
+    const ordered = apiIds.map((id) => storedByApi.get(id));
+
+    if (ordered.some((match) => !match)) {
+      throw new BadRequestException(
+        'Uno o más partidos ya no están disponibles.',
+      );
+    }
+
+    return ordered as Array<(typeof stored)[number]>;
+  }
+
+  async ensureWeekFixtures(
+    from: string,
+    to: string,
+    start: Date,
+    end: Date,
+  ) {
+    const key = `${from}:${to}`;
+    if (
+      this.weekImportKey === key &&
+      Date.now() - this.weekImportAt < 10 * 60 * 1000
+    ) {
+      return;
+    }
+    if (await this.weekIsStored(start, end)) {
+      this.weekImportKey = key;
+      this.weekImportAt = Date.now();
+      return;
+    }
+    if (this.weekImportJob) {
+      return this.weekImportJob;
+    }
+
+    this.weekImportJob = this.loadWeekFixtures(key, from, to, start, end)
+      .finally(() => {
+        this.weekImportJob = null;
+      });
+    return this.weekImportJob;
+  }
+
+  private async loadWeekFixtures(
+    key: string,
+    from: string,
+    to: string,
+    start: Date,
+    end: Date,
+  ) {
+
+    const weekFixtures = await this.collectWeekFixtures(from, to, start, end);
+    if (!weekFixtures) return;
+
+    for (let index = 0; index < weekFixtures.length; index += 12) {
+      await Promise.all(
+        weekFixtures.slice(index, index + 12).map((fixture) =>
+          this.saveAvailableFixture(fixture).catch(() => 'skipped'),
+        ),
+      );
+    }
+
+    this.weekImportKey = key;
+    this.weekImportAt = Date.now();
+  }
+
+  private async collectWeekFixtures(
+    from: string,
+    to: string,
+    start: Date,
+    end: Date,
+  ) {
+    const dates: string[] = [];
+    const cursor = new Date(`${from}T12:00:00.000Z`);
+    const last = new Date(`${to}T12:00:00.000Z`);
+    last.setUTCDate(last.getUTCDate() + 1);
+
+    while (cursor <= last) {
+      dates.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+
+    const weekFixtures: any[] = [];
+
+    for (const date of dates) {
+      const loaded = await this.loadFixturesByDate(date);
+      if (loaded.errors) {
+        console.warn(
+          '[Total Gol] No se pudo consultar la semana de partidos.',
+        );
+        return null;
+      }
+
+      for (const fixture of loaded.fixtures) {
+        const rawDate = fixture?.fixture?.date;
+        const kickoff = typeof rawDate === 'string' ? new Date(rawDate) : null;
+        if (
+          kickoff &&
+          !Number.isNaN(kickoff.getTime()) &&
+          kickoff >= start &&
+          kickoff < end
+        ) {
+          weekFixtures.push(fixture);
+        }
+      }
+    }
+
+    return weekFixtures;
+  }
+
+  private async weekIsStored(start: Date, end: Date) {
+    const earlyEnd = new Date(start.getTime() + 30 * 60 * 60 * 1000);
+    const lateStart = new Date(end.getTime() - 30 * 60 * 60 * 1000);
+    const [early, late] = await Promise.all([
+      this.prisma.match.count({
+        where: { date: { gte: start, lt: earlyEnd } },
+      }),
+      this.prisma.match.count({
+        where: { date: { gte: lateStart, lt: end } },
+      }),
+    ]);
+
+    return early > 0 && late > 0;
   }
 
   async importAvailableMatches(
@@ -1396,6 +1695,7 @@ export class FootballApiService {
     }
 
     const status = fixture?.fixture?.status?.short;
+    const live = this.readLiveClock(fixture);
     const finished = ['FT', 'AET', 'PEN'].includes(status);
     const homeGoals = fixture?.goals?.home;
     const awayGoals = fixture?.goals?.away;
@@ -1447,6 +1747,18 @@ export class FootballApiService {
             awayTeamId,
             matchdayId: matchday.id,
             leagueId,
+            statusShort: recordedResult
+              ? recordedResult.statusShort
+              : live.statusShort,
+            elapsed: recordedResult
+              ? recordedResult.elapsed
+              : live.elapsed,
+            extraTime: recordedResult
+              ? recordedResult.extraTime
+              : live.extraTime,
+            liveAt: recordedResult
+              ? recordedResult.liveAt
+              : live.liveAt,
           },
           create: {
             apiId: fixtureId,
@@ -1458,6 +1770,10 @@ export class FootballApiService {
             awayTeamId,
             matchdayId: matchday.id,
             leagueId,
+            statusShort: live.statusShort,
+            elapsed: live.elapsed,
+            extraTime: live.extraTime,
+            liveAt: live.liveAt,
           },
         });
 
@@ -1599,6 +1915,38 @@ export class FootballApiService {
     }
 
     return true;
+  }
+
+  private async loadFixturesBetween(from: string, to: string) {
+    const fixtures: any[] = [];
+    let page = 1;
+    let total = 1;
+
+    while (page <= total && page <= 40) {
+      const response = await this.client.get('/fixtures', {
+        from,
+        to,
+        page,
+      });
+
+      if (this.hasApiErrors(response?.errors)) {
+        console.warn(
+          '[Total Gol] No se pudo consultar la semana de partidos.',
+        );
+        return { ok: false, fixtures };
+      }
+
+      const batch = Array.isArray(response?.response)
+        ? response.response
+        : [];
+      fixtures.push(...batch);
+      const reported = Number(response?.paging?.total);
+      total = Number.isInteger(reported) && reported > 0 ? reported : 1;
+      if (batch.length === 0) break;
+      page++;
+    }
+
+    return { ok: true, fixtures };
   }
 
   private async loadFixturesByDate(date: string) {

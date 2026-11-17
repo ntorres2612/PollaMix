@@ -11,6 +11,21 @@ import {
   UpcomingChampionship,
   UpcomingMatch,
 } from '@/lib/tournaments';
+import { countryNameEs, teamNameEs } from '@/lib/team-name';
+import { leagueNameEs, roundNameEs } from '@/lib/league-name';
+
+function teamText(match: UpcomingMatch) {
+  return `${teamNameEs(match.homeTeam)} ${teamNameEs(match.awayTeam)} ${match.homeTeam} ${match.awayTeam}`.toLowerCase();
+}
+
+function championshipText(championship: UpcomingChampionship) {
+  return `${leagueNameEs(championship.name, championship.country)} ${countryNameEs(championship.country)} ${championship.name} ${championship.country}`.toLowerCase();
+}
+
+function canSelect(match: UpcomingMatch) {
+  if (typeof match.playable === 'boolean') return match.playable;
+  return new Date(match.date).getTime() > Date.now();
+}
 
 function formatKickoff(value: string) {
   return new Date(value).toLocaleString('es-CO', {
@@ -20,6 +35,45 @@ function formatKickoff(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+const PAGE_SIZE = 10;
+
+function Pager({
+  page,
+  total,
+  onPage,
+}: {
+  page: number;
+  total: number;
+  onPage: (page: number) => void;
+}) {
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (total <= PAGE_SIZE) return null;
+
+  return (
+    <div className="mt-4 flex items-center justify-between gap-3 text-sm">
+      <button
+        type="button"
+        disabled={page <= 1}
+        onClick={() => onPage(page - 1)}
+        className="rounded-xl border border-white/15 px-3 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Anterior
+      </button>
+      <span className="text-slate-400">
+        Página {page} de {pages}
+      </span>
+      <button
+        type="button"
+        disabled={page >= pages}
+        onClick={() => onPage(page + 1)}
+        className="rounded-xl border border-white/15 px-3 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Siguiente
+      </button>
+    </div>
+  );
 }
 
 export default function NewTournamentPage() {
@@ -32,7 +86,9 @@ export default function NewTournamentPage() {
   const [selectedKey, setSelectedKey] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [name, setName] = useState('');
-  const [inscription, setInscription] = useState('10000');
+  const [inscription, setInscription] = useState('16000');
+  const [championshipPage, setChampionshipPage] = useState(1);
+  const [matchPage, setMatchPage] = useState(1);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -76,17 +132,87 @@ export default function NewTournamentPage() {
     const term = query.trim().toLowerCase();
     if (!term) return championships;
     return championships.filter((championship) =>
-      `${championship.name} ${championship.country}`
-        .toLowerCase()
-        .includes(term),
+      championshipText(championship).includes(term) ||
+      championship.rounds.some((round) =>
+        round.matches.some((match) => teamText(match).includes(term)),
+      ),
     );
   }, [championships, query]);
 
-  const selectedChampionship =
-    championships.find(
+  useEffect(() => {
+    if (!visibleChampionships.length) return;
+    const visible = visibleChampionships.some(
       (championship) =>
         `${championship.leagueId}:${championship.season}` === selectedKey,
-    ) ?? null;
+    );
+    if (!visible) {
+      const first = visibleChampionships[0];
+      setSelectedKey(`${first.leagueId}:${first.season}`);
+      setMatchPage(1);
+    }
+  }, [visibleChampionships, selectedKey]);
+
+  const championshipPageCount = Math.max(
+    1,
+    Math.ceil(visibleChampionships.length / PAGE_SIZE),
+  );
+  const championshipPageSafe = Math.min(championshipPage, championshipPageCount);
+  const pagedChampionships = visibleChampionships.slice(
+    (championshipPageSafe - 1) * PAGE_SIZE,
+    championshipPageSafe * PAGE_SIZE,
+  );
+
+  const selectedChampionship =
+    visibleChampionships.find(
+      (championship) =>
+        `${championship.leagueId}:${championship.season}` === selectedKey,
+    ) ??
+    visibleChampionships[0] ??
+    null;
+
+  const listedMatches = useMemo(() => {
+    if (!selectedChampionship) return [];
+    const term = query.trim().toLowerCase();
+    const leagueMatches = championshipText(selectedChampionship).includes(term);
+    return selectedChampionship.rounds.flatMap((round) =>
+      round.matches
+        .filter((match) => !term || leagueMatches || teamText(match).includes(term))
+        .map((match) => ({
+          ...match,
+          roundId: round.id,
+          roundName: round.roundName,
+          roundSize: round.matches.length,
+        })),
+    );
+  }, [selectedChampionship, query]);
+
+  const matchPageCount = Math.max(1, Math.ceil(listedMatches.length / PAGE_SIZE));
+  const matchPageSafe = Math.min(matchPage, matchPageCount);
+  const pagedMatches = listedMatches.slice(
+    (matchPageSafe - 1) * PAGE_SIZE,
+    matchPageSafe * PAGE_SIZE,
+  );
+  const pagedRounds = pagedMatches.reduce<
+    Array<{
+      id: number;
+      roundName: string;
+      roundSize: number;
+      matches: typeof pagedMatches;
+    }>
+  >((groups, match) => {
+    const current = groups[groups.length - 1];
+    if (!current || current.roundName !== match.roundName) {
+      groups.push({
+        id: match.roundId,
+        roundName: match.roundName,
+        roundSize: match.roundSize,
+        matches: [match],
+      });
+      return groups;
+    }
+    current.matches.push(match);
+    return groups;
+  }, []);
 
   const matchesById = useMemo(() => {
     const map = new Map<number, UpcomingMatch & { championship: string; round: string }>();
@@ -95,7 +221,7 @@ export default function NewTournamentPage() {
         for (const match of round.matches) {
           map.set(match.id, {
             ...match,
-            championship: championship.name,
+            championship: leagueNameEs(championship.name, championship.country),
             round: round.roundName,
           });
         }
@@ -109,23 +235,22 @@ export default function NewTournamentPage() {
       if (current.includes(matchId)) {
         return current.filter((id) => id !== matchId);
       }
-      if (current.length >= 10) return current;
       return [...current, matchId];
     });
     setError('');
   }
 
   function useRound(matchIds: number[]) {
-    setSelectedIds(matchIds.slice(0, 10));
+    setSelectedIds(matchIds);
     setError('');
     if (!name.trim() && selectedChampionship) {
-      setName(`${selectedChampionship.name} · jornada`);
+      setName(`${leagueNameEs(selectedChampionship.name, selectedChampionship.country)} · jornada`);
     }
   }
 
   async function save() {
-    if (selectedIds.length !== 10) {
-      setError('Selecciona exactamente 10 partidos.');
+    if (selectedIds.length < 1) {
+      setError('Selecciona al menos un partido.');
       return;
     }
 
@@ -133,7 +258,7 @@ export default function NewTournamentPage() {
       setSaving(true);
       setError('');
       const tournament = await openTournament({
-        name: name.trim() || 'Polla GolPro',
+        name: name.trim() || 'Polla Total Gol',
         inscription: Number(inscription),
         currency: 'COP',
         matchIds: selectedIds,
@@ -169,20 +294,22 @@ export default function NewTournamentPage() {
               </p>
               <h1 className="mt-2 text-4xl font-black">Armar Polla</h1>
               <p className="mt-3 max-w-2xl text-slate-400">
-                Elige un campeonato, marca la jornada y deja 10 partidos.
-                Con eso se abre la inscripción.
+                Primera división, amistosos de selecciones mayores y
+                eliminatorias de mayores, con partidos que todavía no
+                empiezan, de aquí al domingo. Todavía no está en la base. Al
+                abrir la inscripción se guardan los partidos que elijas.
               </p>
             </div>
             <div
               className={`rounded-xl px-6 py-4 text-center ${
-                selectedIds.length === 10
+                selectedIds.length > 0
                   ? 'bg-green-500/15 text-green-400'
                   : 'bg-red-500/15 text-red-400'
               }`}
             >
-              <p className="text-3xl font-black">
-                {selectedIds.length}
-                <span className="text-slate-500"> / 10</span>
+              <p className="text-3xl font-black">{selectedIds.length}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                {selectedIds.length === 1 ? 'partido' : 'partidos'}
               </p>
             </div>
           </div>
@@ -195,37 +322,43 @@ export default function NewTournamentPage() {
 
           {loading ? (
             <p className="py-16 text-center text-slate-400">
-              Cargando campeonatos y jornadas...
+              Consultando los partidos de la semana...
             </p>
           ) : championships.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center text-slate-400">
-              No hay partidos futuros para armar una Polla.
+              No hay partidos de primera división, amistosos ni eliminatorias de mayores pendientes hasta el domingo.
             </div>
           ) : (
             <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
               <aside className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <input
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Buscar campeonato"
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setChampionshipPage(1);
+                  }}
+                  placeholder="Buscar campeonato o equipo"
                   className="mb-4 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-red-500"
                 />
-                <div className="max-h-[70vh] space-y-2 overflow-y-auto pr-1">
-                  {visibleChampionships.map((championship) => {
+                <div className="space-y-2 pr-1">
+                  {pagedChampionships.map((championship) => {
                     const key = `${championship.leagueId}:${championship.season}`;
                     const active = key === selectedKey;
                     return (
                       <button
                         key={key}
                         type="button"
-                        onClick={() => setSelectedKey(key)}
+                        onClick={() => {
+                          setSelectedKey(key);
+                          setMatchPage(1);
+                        }}
                         className={`w-full rounded-xl px-4 py-3 text-left ${
                           active ? 'bg-red-600' : 'bg-slate-950/70 hover:bg-white/10'
                         }`}
                       >
-                        <span className="block font-bold">{championship.name}</span>
+                        <span className="block font-bold">{leagueNameEs(championship.name, championship.country)}</span>
                         <span className={`mt-1 block text-xs ${active ? 'text-red-100' : 'text-slate-400'}`}>
-                          {championship.country} · {championship.upcoming} partidos
+                          {countryNameEs(championship.country)} · {championship.upcoming} partidos
                         </span>
                       </button>
                     );
@@ -236,25 +369,38 @@ export default function NewTournamentPage() {
                     </p>
                   )}
                 </div>
+                <Pager
+                  page={championshipPageSafe}
+                  total={visibleChampionships.length}
+                  onPage={setChampionshipPage}
+                />
               </aside>
 
               <section className="space-y-5">
-                {selectedChampionship?.rounds.map((round) => (
+                {pagedRounds.map((round, index) => (
                   <article
-                    key={round.id}
+                    key={`${round.roundName}-${index}`}
                     className="overflow-hidden rounded-2xl border border-white/10 bg-white/5"
                   >
                     <div className="flex flex-col gap-3 border-b border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <h2 className="text-xl font-black">{round.roundName}</h2>
+                        <h2 className="text-xl font-black">{roundNameEs(round.roundName)}</h2>
                         <p className="text-sm text-slate-400">
-                          {round.matches.length}{' '}
-                          {round.matches.length === 1 ? 'partido' : 'partidos'}
+                          {round.roundSize}{' '}
+                          {round.roundSize === 1 ? 'partido' : 'partidos'}
                         </p>
                       </div>
                       <button
                         type="button"
-                        onClick={() => useRound(round.matches.map((match) => match.id))}
+                        onClick={() =>
+                          useRound(
+                            (selectedChampionship?.rounds.find(
+                              (item) => item.roundName === round.roundName,
+                            )?.matches ?? round.matches)
+                              .filter(canSelect)
+                              .map((match) => match.id),
+                          )
+                        }
                         className="rounded-xl border border-white/15 px-4 py-2 text-sm font-bold hover:bg-white/10"
                       >
                         Usar esta jornada
@@ -263,7 +409,8 @@ export default function NewTournamentPage() {
                     <div className="divide-y divide-white/5">
                       {round.matches.map((match) => {
                         const selected = selectedIds.includes(match.id);
-                        const disabled = !selected && selectedIds.length >= 10;
+                        const playable = canSelect(match);
+                        const disabled = !playable;
                         return (
                           <button
                             key={match.id}
@@ -289,10 +436,11 @@ export default function NewTournamentPage() {
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="block font-bold">
-                                {match.homeTeam} vs {match.awayTeam}
+                                {teamNameEs(match.homeTeam)} vs {teamNameEs(match.awayTeam)}
                               </span>
                               <span className="mt-1 block text-sm text-slate-400">
                                 {formatKickoff(match.date)}
+                                {playable ? '' : ' · Ya empezó'}
                               </span>
                             </span>
                           </button>
@@ -301,6 +449,12 @@ export default function NewTournamentPage() {
                     </div>
                   </article>
                 ))}
+
+                <Pager
+                  page={matchPageSafe}
+                  total={listedMatches.length}
+                  onPage={setMatchPage}
+                />
 
                 <div className="rounded-2xl border border-white/10 bg-slate-950 p-5">
                   <h2 className="text-lg font-black">Abrir inscripción</h2>
@@ -337,7 +491,7 @@ export default function NewTournamentPage() {
                         if (!match) return null;
                         return (
                           <li key={id}>
-                            {match.championship}: {match.homeTeam} vs {match.awayTeam}
+                            {match.championship}: {teamNameEs(match.homeTeam)} vs {teamNameEs(match.awayTeam)}
                           </li>
                         );
                       })}
@@ -346,7 +500,7 @@ export default function NewTournamentPage() {
                   <button
                     type="button"
                     onClick={() => void save()}
-                    disabled={saving || selectedIds.length !== 10}
+                    disabled={saving || selectedIds.length < 1}
                     className="mt-5 w-full rounded-xl bg-red-600 px-5 py-3 font-black disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {saving ? 'Abriendo inscripción...' : 'Abrir inscripción'}

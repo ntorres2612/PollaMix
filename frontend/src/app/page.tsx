@@ -1,6 +1,5 @@
-import CurrentTournamentMatches from "@/components/match/CurrentTournamentMatches";
 import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
+import HomeGate from "@/components/home/HomeGate";
 import HeroV2 from "@/components/home/HeroV2";
 
 export default function Home() {
@@ -10,9 +9,7 @@ export default function Home() {
 
       <HeroV2 />
 
-      <CurrentTournamentMatches />
-
-      <Footer />
+      <HomeGate />
     </main>
   );
 }

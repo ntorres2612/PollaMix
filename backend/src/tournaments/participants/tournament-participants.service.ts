@@ -5,8 +5,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { randomUUID } from 'node:crypto';
-
 import {
   Prisma,
 } from '@prisma/client';
@@ -317,33 +315,7 @@ export class TournamentParticipantsService {
               },
             });
 
-          const payment = await tx.payment.create({
-            data: {
-              tournamentId,
-              userId,
-              participantId: participant.id,
-              amount: tournament.inscription,
-              currency: 'COP',
-              status: 'PENDING',
-              reference:
-                `PNT-${tournamentId}-${userId}-${randomUUID()}`,
-            },
-            select: {
-              id: true,
-              amount: true,
-              reference: true,
-              status: true,
-            },
-          });
-
-          return {
-            participant,
-            payment: {
-              ...payment,
-              currency: 'COP',
-              amountCOP: payment.amount,
-            },
-          };
+          return { participant };
         },
         {
           isolationLevel:

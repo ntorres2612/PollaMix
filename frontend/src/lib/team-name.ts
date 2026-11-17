@@ -51,8 +51,8 @@ const COUNTRIES: Record<string, string> = {
   Cuba: "Cuba",
   Curaçao: "Curazao",
   Cyprus: "Chipre",
+  Czechia: "República Checa",
   "Czech Republic": "República Checa",
-  Czechia: "Chequia",
   Denmark: "Dinamarca",
   Djibouti: "Yibuti",
   Dominica: "Dominica",
@@ -212,19 +212,84 @@ const CLUBS: Record<string, string> = {
   "Guadalajara Chivas": "Chivas Guadalajara",
   "Atletico San Luis": "Atlético de San Luis",
   "Atletico Nacional": "Atlético Nacional",
+  "Independiente Medellin": "Independiente Medellín",
+  "Independiente Medellín": "Independiente Medellín",
+  Bucaramanga: "Atlético Bucaramanga",
+  Cucuta: "Cúcuta Deportivo",
+  Cúcuta: "Cúcuta Deportivo",
+  Jaguares: "Jaguares de Córdoba",
+  Leon: "León",
   "U.N.A.M. - Pumas": "Pumas UNAM",
   "CF Pachuca": "Pachuca",
   "FC Juarez": "FC Juárez",
+  "Bayern Munich": "Bayern Múnich",
+  "Bayern München": "Bayern Múnich",
+  "Borussia Monchengladbach": "Borussia Mönchengladbach",
+  "Paris Saint Germain": "París Saint-Germain",
+  "Paris Saint-Germain": "París Saint-Germain",
+  "Olympique Marseille": "Olympique de Marsella",
+  "Olympique Lyonnais": "Olympique de Lyon",
+  "AS Monaco": "Mónaco",
+  Monaco: "Mónaco",
+  "Atletico Madrid": "Atlético de Madrid",
+  "Atlético Madrid": "Atlético de Madrid",
+  "Athletic Bilbao": "Athletic Club",
+  Napoli: "Nápoles",
+  "SSC Napoli": "Nápoles",
+  Inter: "Inter de Milán",
+  "Inter Milan": "Inter de Milán",
+  "AC Milan": "Milan",
+  "Sporting CP": "Sporting de Lisboa",
+  "FC Porto": "Oporto",
+  "FC Koln": "Colonia",
+  "1. FC Koln": "Colonia",
+  "1. FC Köln": "Colonia",
+  "Sao Paulo": "São Paulo",
+  "Atletico Mineiro": "Atlético Mineiro",
+  "Club Leon": "León",
+  "Mazatlan": "Mazatlán",
+  "Mazatlan FC": "Mazatlán",
+  "America de Cali": "América de Cali",
+  "Deportivo Cali": "Deportivo Cali",
+  Ulaanbaatar: "Ulán Bator",
+  "Ulan Bator": "Ulán Bator",
+  Munich: "Múnich",
+  Cologne: "Colonia",
+  Vienna: "Viena",
+  Prague: "Praga",
+  Warsaw: "Varsovia",
+  Moscow: "Moscú",
+  Lisbon: "Lisboa",
+  Athens: "Atenas",
+  Brussels: "Bruselas",
+  Copenhagen: "Copenhague",
+  Stockholm: "Estocolmo",
+  Bucharest: "Bucarest",
+  Belgrade: "Belgrado",
+  Zurich: "Zúrich",
+  Geneva: "Ginebra",
 };
+
+const COUNTRY_INDEX = new Map(
+  Object.entries(COUNTRIES).map(([key, value]) => [
+    key.replace(/-/g, " ").replace(/\s+/g, " ").trim().toLowerCase(),
+    value,
+  ]),
+);
+
+export function countryNameEs(name: string): string {
+  const key = name.replace(/-/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  return COUNTRY_INDEX.get(key) ?? name.replace(/-/g, " ").trim();
+}
 
 export function teamNameEs(name: string): string {
   const trimmed = name.trim();
-  const youth = trimmed.match(/^(.*?)(?:\s+)(U1[7-9]|U2[0-3]|W)$/);
+  const youth = trimmed.match(/^(.*?)(?:\s+)(U1[7-9]|U2[0-3]|Women|Ladies|W)$/i);
   const base = youth?.[1] ?? trimmed;
-  const suffix = youth?.[2] ?? "";
+  const suffix = (youth?.[2] ?? "").toUpperCase();
   const translated = COUNTRIES[base] ?? CLUBS[base] ?? base;
 
-  if (suffix === "W") {
+  if (suffix === "W" || suffix === "WOMEN" || suffix === "LADIES") {
     return `${translated} femenino`;
   }
 

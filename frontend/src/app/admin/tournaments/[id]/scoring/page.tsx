@@ -16,6 +16,7 @@ import {
 
 import { getCurrentUser } from "@/lib/auth";
 import { teamNameEs } from "@/lib/team-name";
+import { matchMomentLabel } from "@/lib/match-clock";
 
 import {
   getSelectedTournamentMatches,
@@ -852,9 +853,7 @@ export default function TournamentScoringPage() {
                           </p>
 
                           <p className="mt-1 text-sm text-slate-500">
-                            {formatDate(
-                              match.date,
-                            )}
+                            {matchMomentLabel(match)}
                           </p>
 
                         </div>

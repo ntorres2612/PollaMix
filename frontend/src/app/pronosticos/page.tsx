@@ -11,7 +11,6 @@ import {
 import { useRouter } from "next/navigation";
 
 import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
 import TeamLogo from "@/components/match/TeamLogo";
 import BreBPaymentCard from "@/components/payments/BreBPaymentCard";
 
@@ -34,6 +33,8 @@ import { submitPredictions } from "@/lib/predictions";
 
 import { getCurrentUser } from "@/lib/auth";
 import { teamNameEs } from "@/lib/team-name";
+import { competitionLabel } from "@/lib/league-name";
+import { matchClock } from "@/lib/match-clock";
 
 type Outcome = "HOME" | "DRAW" | "AWAY";
 
@@ -54,7 +55,7 @@ function receiptWhatsappLink(tournamentName: string) {
   }
 
   const message =
-    `Hola, equipo de GolPro. Ya guardé mis pronósticos de ${tournamentName}. ` +
+    `Hola, equipo de Total Gol. Ya guardé mis pronósticos de ${tournamentName}. ` +
     "Quiero enviar mi comprobante de pago para que puedan verificar mi inscripción. " +
     "Adjunto el soporte a continuación.";
 
@@ -146,6 +147,7 @@ export default function PredictionsPage() {
     useState(true);
 
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptPaymentId, setReceiptPaymentId] = useState<number | null>(null);
   const [entries, setEntries] = useState<PollEntrySummary[]>([]);
   const [makingNew, setMakingNew] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -161,6 +163,8 @@ export default function PredictionsPage() {
     setSuccess,
   ] =
     useState("");
+
+  const [now, setNow] = useState(() => Date.now());
 
   const loadData =
     useCallback(
@@ -253,6 +257,18 @@ export default function PredictionsPage() {
     loadData,
   ]);
 
+  useEffect(() => {
+    const clock = window.setInterval(() => setNow(Date.now()), 15000);
+    const refresh = window.setInterval(() => {
+      void loadData(true);
+    }, 60000);
+
+    return () => {
+      window.clearInterval(clock);
+      window.clearInterval(refresh);
+    };
+  }, [loadData]);
+
   const completedCount = Object.keys(drafts).length;
 
   const totalMatches =
@@ -291,12 +307,12 @@ export default function PredictionsPage() {
     }
 
     if (
-      matches.length !== 10 ||
-      selectedCount !== 10 ||
+      matches.length < 1 ||
+      selectedCount !== matches.length ||
       matches.some((match) => !drafts[match.id])
     ) {
       setError(
-        "Elige Local, Empate o Visitante en los 10 partidos.",
+        "Elige Local, Empate o Visitante en cada partido.",
       );
       return;
     }
@@ -327,7 +343,7 @@ export default function PredictionsPage() {
           const selection = drafts[match.id];
           if (!selection) {
             throw new Error(
-              "Elige Local, Empate o Visitante en los 10 partidos.",
+              "Elige Local, Empate o Visitante en cada partido.",
             );
           }
           return { matchId: match.id, selection };
@@ -364,13 +380,15 @@ export default function PredictionsPage() {
       return;
     }
 
+    setReceiptPaymentId(null);
     setReceiptOpen(true);
 
     try {
-      await createPayment({
+      const payment = await createPayment({
         tournamentId: tournament.id,
         ...(entryId ? { entryId } : {}),
       });
+      setReceiptPaymentId(payment.id);
     } catch (paymentError) {
       setError(
         paymentError instanceof Error
@@ -395,8 +413,6 @@ export default function PredictionsPage() {
 
         </div>
 
-        <Footer />
-
       </main>
     );
   }
@@ -413,7 +429,7 @@ export default function PredictionsPage() {
           <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-10 text-center shadow-2xl">
 
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-400">
-              GolPro
+              Total Gol
             </p>
 
             <h1 className="mt-3 text-3xl font-black">
@@ -434,8 +450,6 @@ export default function PredictionsPage() {
           </div>
 
         </div>
-
-        <Footer />
 
       </main>
     );
@@ -585,12 +599,13 @@ export default function PredictionsPage() {
                 Envía tu comprobante
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-300">
-                Este pronóstico ya está guardado. Envía el comprobante de su pago.
-                Cuando el administrador lo apruebe, ese pronóstico participa.
+                Este pronóstico ya está guardado. En el mensaje de la transferencia escribe el código GP.
+                Cuando el dinero entre a la cuenta, ese pronóstico queda pagado.
               </p>
               <BreBPaymentCard
                 amount={tournament.inscription}
                 currency={tournament.currency}
+                conceptCodes={receiptPaymentId ? [`GP${receiptPaymentId}`] : []}
               />
               {receiptWhatsappLink(tournament.name) ? (
                 <a
@@ -616,7 +631,6 @@ export default function PredictionsPage() {
             </div>
           </div>
         )}
-        <Footer />
       </main>
     );
   }
@@ -702,7 +716,7 @@ export default function PredictionsPage() {
             </h2>
 
             <p className="mt-3 text-slate-300">
-              Elige Local, Empate o Visitante en los 10 partidos. Al guardar, este pronóstico queda pendiente y se abre el comprobante de su pago.
+              Elige Local, Empate o Visitante en cada partido. Al guardar, este pronóstico queda pendiente y se abre el comprobante de su pago.
             </p>
 
             <Link
@@ -841,6 +855,8 @@ export default function PredictionsPage() {
                       match.date,
                     );
 
+                  const clock = matchClock(match, now);
+
                   const locked =
                     started ||
                     saving;
@@ -879,15 +895,34 @@ export default function PredictionsPage() {
                                 match.date,
                               )}
                             </p>
+                            {competitionLabel(
+                              match.league?.name || match.matchday?.tournament,
+                              match.league?.country,
+                              match.matchday?.roundName,
+                            ) && (
+                              <p className="mt-1 text-xs text-slate-500">
+                                {competitionLabel(
+                                  match.league?.name || match.matchday?.tournament,
+                                  match.league?.country,
+                                  match.matchday?.roundName,
+                                )}
+                              </p>
+                            )}
 
                           </div>
 
                         </div>
 
-                        {started ? (
+                        {clock.phase === "live" ? (
+
+                          <span className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-bold text-red-300">
+                            En vivo{clock.minute ? ` · ${clock.minute}` : ""}
+                          </span>
+
+                        ) : clock.phase === "finished" ? (
 
                           <span className="rounded-full border border-slate-500/20 bg-slate-500/10 px-3 py-1 text-xs font-bold text-slate-400">
-                            Cerrado
+                            Final
                           </span>
 
                         ) : (
@@ -926,10 +961,23 @@ export default function PredictionsPage() {
 
                         </div>
 
-                        <div className="flex items-center justify-center">
-                          <span className="text-xl font-black text-slate-500">
-                            VS
-                          </span>
+                        <div className="flex flex-col items-center justify-center text-center">
+                          {clock.phase === "upcoming" ? (
+                            <span className="text-xl font-black text-slate-500">
+                              VS
+                            </span>
+                          ) : (
+                            <>
+                              <span className="text-2xl font-black text-white">
+                                {clock.score ?? "–"}
+                              </span>
+                              {clock.minute && (
+                                <span className="mt-1 text-xs font-bold text-red-300">
+                                  {clock.minute}
+                                </span>
+                              )}
+                            </>
+                          )}
                         </div>
 
                         {/* Visitante */}
@@ -1067,12 +1115,13 @@ export default function PredictionsPage() {
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-300">
               Tus 10 pronósticos quedaron guardados en estado pendiente.
-              Envía el comprobante de pago. Cuando el administrador lo apruebe, participas.
+              En el mensaje de la transferencia escribe el código GP. Cuando el dinero entre a la cuenta, participas.
             </p>
 
             <BreBPaymentCard
               amount={tournament.inscription}
               currency={tournament.currency}
+              conceptCodes={receiptPaymentId ? [`GP${receiptPaymentId}`] : []}
             />
 
             {receiptWhatsappLink(tournament.name) ? (
@@ -1100,8 +1149,6 @@ export default function PredictionsPage() {
           </div>
         </div>
       )}
-
-      <Footer />
 
     </main>
   );

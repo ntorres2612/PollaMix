@@ -6,14 +6,20 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const football = fs.readFileSync(path.join(__dirname, 'football-api.service.ts'), 'utf8');
-const espn = fs.readFileSync(path.join(__dirname, 'espn/espn-football.service.ts'), 'utf8');
 
-const resultsStart = football.lastIndexOf('const existingMatch =');
-const resultTxStart = football.indexOf('const committedScoring = await this.prisma.$transaction(', resultsStart);
-const resultTxEnd = football.indexOf('}, { timeout: 20000 });', resultTxStart);
+const updateStart = football.indexOf('async updateResults(');
+const updateEnd = football.indexOf('\n  async ', updateStart + 20);
+const updateFn = football.slice(updateStart, updateEnd);
 
-const resultTx = football.slice(resultTxStart, resultTxEnd);
-const afterResultTx = football.slice(resultTxEnd, resultTxEnd + 180);
+const resultsStart = updateFn.indexOf('const existingMatch =');
+const resultTxStart = updateFn.indexOf(
+  'const committedScoring = await this.prisma.$transaction(',
+  resultsStart,
+);
+const resultTxEnd = updateFn.indexOf('}, { timeout: 120000 });', resultTxStart);
+
+const resultTx = updateFn.slice(resultTxStart, resultTxEnd);
+const afterResultTx = updateFn.slice(resultTxEnd, resultTxEnd + 180);
 
 describe('Invariantes estructurales de sincronización (no integración)', () => {
   it('API-Football bloquea partido antes de actualizar resultados', () => {
@@ -33,18 +39,5 @@ describe('Invariantes estructurales de sincronización (no integración)', () =>
     expect(resultTx).not.toMatch(/\bupdated\+\+|\bscored\+\+/);
     expect(afterResultTx).toContain('updated++;');
     expect(afterResultTx).toContain('if (committedScoring) scored++;');
-  });
-
-  it('ESPN bloquea y puntúa dentro de la misma transacción', () => {
-    const sectionStart = espn.indexOf('const { match, scoringResult } = await this.prisma.$transaction(');
-    const sectionEnd = espn.indexOf('{ timeout: 20000 }', sectionStart);
-    expect(sectionStart).toBeGreaterThanOrEqual(0);
-    expect(sectionEnd).toBeGreaterThan(sectionStart);
-    const section = espn.slice(sectionStart, sectionEnd);
-    const lock = section.indexOf('lockMatchForPrizeSafeUpdate(tx, existingMatch.id)');
-    const update = section.indexOf('await tx.match.update(');
-    expect(lock).toBeGreaterThanOrEqual(0);
-    expect(update).toBeGreaterThan(lock);
-    expect(section).toMatch(/scoreMatchInTransaction\(tx, match\.id\)/);
   });
 });

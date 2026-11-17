@@ -8,10 +8,14 @@ import { TournamentParticipantsController } from './participants/tournament-part
 import { TournamentParticipantsService } from './participants/tournament-participants.service';
 
 import { PrismaModule } from '../prisma/prisma.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { FootballApiModule } from '../football-api/football-api.module';
 
 @Module({
   imports: [
     PrismaModule,
+    NotificationsModule,
+    FootballApiModule,
   ],
   controllers: [
     TournamentsController,

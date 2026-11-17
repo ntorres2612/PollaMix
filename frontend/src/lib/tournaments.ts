@@ -124,6 +124,7 @@ export interface UpcomingMatch {
   date: string;
   homeTeam: string;
   awayTeam: string;
+  playable?: boolean;
 }
 
 export interface UpcomingRound {
@@ -190,8 +191,9 @@ export function buildAdminSlips(
   for (const participant of participants) {
     const ownPayments = payments.filter(
       (payment) =>
-        payment.participantId === participant.id ||
-        payment.userId === participant.userId,
+        (payment.participantId === participant.id ||
+          payment.userId === participant.userId) &&
+        payment.status !== "REJECTED",
     );
 
     const latestBySlip = new Map<string, TournamentPayment>();
@@ -427,6 +429,11 @@ export interface TournamentPayment {
 
   entryId?: number | null;
 
+  tournament?: {
+    id: number;
+    name: string;
+  } | null;
+
   participant?: {
     id: number;
 
@@ -553,6 +560,8 @@ export interface TournamentPrizeWinner {
   position: number;
   amountCOP: number;
   paid?: boolean;
+  paidAt?: string | null;
+  phone?: string | null;
 }
 
 export interface TournamentPrizesResponse {
@@ -605,7 +614,9 @@ export interface PublicPrizeHistory {
   id: number;
   name: string;
   season: number;
-  closedAt: string;
+  closedAt: string | null;
+  startsAt?: string;
+  firstMatchAt?: string;
 }
 
 export interface PublicPrizesResponse {
@@ -639,6 +650,7 @@ export interface MyPrize {
   provisional?: boolean;
   concept?: "ganancia";
   paid?: boolean;
+  paidAt?: string | null;
 }
 
 export interface MyPrizes {

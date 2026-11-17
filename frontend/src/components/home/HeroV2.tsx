@@ -30,12 +30,16 @@ export default function HeroV2() {
   const [destination, setDestination] = useState("/login");
   const [buttonLabel, setButtonLabel] =
     useState("Ingresar y participar");
+  const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
     const user = getCurrentUser();
     const token = getToken();
 
-    if (!user || !token) return;
+    if (!user || !token) {
+      setSignedIn(false);
+      return;
+    }
 
     try {
       const payload = token.split(".")[1];
@@ -57,6 +61,8 @@ export default function HeroV2() {
         return;
       }
 
+      setSignedIn(true);
+
       if (user.role === "ADMIN") {
         setDestination("/admin/tournaments");
         setButtonLabel("Ir a administración");
@@ -77,7 +83,7 @@ export default function HeroV2() {
           aria-hidden="true"
           className="absolute inset-0 -z-20 bg-cover bg-center"
           style={{
-            backgroundImage: "url('/images/stadium.png')",
+            backgroundImage: "url('/images/stadium.jpg')",
           }}
         />
 
@@ -86,7 +92,7 @@ export default function HeroV2() {
           className="absolute inset-0 -z-10"
           style={{
             background:
-              "linear-gradient(90deg, rgba(3,9,23,.96) 0%, rgba(3,9,23,.86) 43%, rgba(3,9,23,.47) 100%), linear-gradient(0deg, #071321 0%, transparent 32%)",
+              "linear-gradient(90deg, rgba(3,9,23,.96) 0%, rgba(3,9,23,.82) 42%, rgba(3,9,23,.55) 100%), linear-gradient(0deg, #071321 0%, transparent 34%)",
           }}
         />
 
@@ -94,7 +100,7 @@ export default function HeroV2() {
           <div className="max-w-[760px]">
             <span className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[.16em] text-red-300 backdrop-blur-sm sm:text-sm">
               <span className="h-2 w-2 rounded-full bg-red-500" />
-              La emoción del fútbol
+              La emoción del gol absoluto
             </span>
 
             <h1 className="mt-8 text-5xl font-black leading-[1.06] tracking-tight text-white sm:text-6xl lg:text-[76px]">
@@ -120,14 +126,14 @@ export default function HeroV2() {
               </Link>
 
               <Link
-                href="/premios"
+                href={signedIn ? "/premios" : "/register"}
                 className="inline-flex min-h-14 items-center justify-center rounded-xl border border-white/25 bg-white/10 px-8 text-base font-semibold text-white backdrop-blur-sm transition hover:border-white/50 hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
               >
-                Conocer los premios
+                {signedIn ? "Conocer los premios" : "Crear cuenta"}
               </Link>
             </div>
 
-            <HomeTournamentStats />
+            {signedIn && <HomeTournamentStats />}
 
             <div className="mt-14 grid max-w-[670px] gap-4 border-t border-white/15 pt-7 sm:grid-cols-3">
               <div>
@@ -172,7 +178,7 @@ export default function HeroV2() {
             </h2>
 
             <p className="mt-4 text-base leading-7 text-slate-400">
-              Tres pasos para empezar a disfrutar GolPro.
+              Tres pasos para empezar a disfrutar Total Gol.
             </p>
           </div>
 
@@ -199,17 +205,17 @@ export default function HeroV2() {
 
           <div className="mt-12 flex flex-wrap gap-4">
             <Link
-              href="/jornadas"
+              href={signedIn ? "/jornadas" : "/register"}
               className="font-semibold text-red-400 transition hover:text-red-300"
             >
-              Ver jornadas <span aria-hidden="true">→</span>
+              {signedIn ? "Ver jornadas" : "Quiero participar"} <span aria-hidden="true">→</span>
             </Link>
 
             <Link
-              href="/clasificacion"
+              href={signedIn ? "/clasificacion" : "/reglas"}
               className="font-semibold text-slate-300 transition hover:text-white"
             >
-              Ver clasificación <span aria-hidden="true">→</span>
+              {signedIn ? "Ver clasificación" : "Leer el reglamento"} <span aria-hidden="true">→</span>
             </Link>
           </div>
         </div>

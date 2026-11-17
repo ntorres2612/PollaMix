@@ -704,7 +704,7 @@ export default function TournamentParticipantsPage() {
             </h2>
 
             <p className="mt-1 text-sm text-slate-400">
-              Cada pronóstico del mismo jugador aparece con su propio pago.
+              Cada persona inscrita aparece aquí. Un pronóstico con pago rechazado deja de mostrarse.
             </p>
 
           </div>

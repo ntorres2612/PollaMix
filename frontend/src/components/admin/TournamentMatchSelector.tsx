@@ -10,6 +10,7 @@ import {
 
 import { ApiMatch } from '@/types/match';
 import { teamNameEs } from '@/lib/team-name';
+import { leagueNameEs, roundNameEs } from '@/lib/league-name';
 
 interface TournamentMatchSelectorProps {
   tournamentId: number;
@@ -365,17 +366,6 @@ export default function TournamentMatchSelector({
 
         }
 
-        /*
-         * Máximo 10.
-         */
-        if (
-          current.length >= 10
-        ) {
-
-          return current;
-
-        }
-
         return [
           ...current,
           matchId,
@@ -401,11 +391,11 @@ export default function TournamentMatchSelector({
     }
 
     if (
-      selectedIds.length !== 10
+      selectedIds.length < 1
     ) {
 
       setError(
-        'Debes seleccionar exactamente 10 partidos.',
+        'Selecciona al menos un partido.',
       );
 
       return;
@@ -426,7 +416,7 @@ export default function TournamentMatchSelector({
       );
 
       setSuccess(
-        'Los 10 partidos fueron guardados correctamente.',
+        'Los partidos fueron guardados correctamente.',
       );
 
     } catch (error) {
@@ -480,7 +470,7 @@ export default function TournamentMatchSelector({
             </h2>
 
             <p className="mt-1 text-sm text-slate-400">
-              El administrador selecciona los 10 partidos.
+              El administrador selecciona los partidos que quiera.
               Los jugadores serán quienes ingresen los
               marcadores.
             </p>
@@ -489,7 +479,7 @@ export default function TournamentMatchSelector({
 
           <div
             className={`rounded-xl px-6 py-4 text-center ${
-              selectedIds.length === 10
+              selectedIds.length > 0
                 ? 'bg-green-500/15 text-green-400'
                 : 'bg-red-500/15 text-red-400'
             }`}
@@ -498,11 +488,6 @@ export default function TournamentMatchSelector({
             <div className="text-3xl font-black">
 
               {selectedIds.length}
-
-              <span className="text-slate-500">
-                {' '}
-                / 10
-              </span>
 
             </div>
 
@@ -540,7 +525,7 @@ export default function TournamentMatchSelector({
                   {predictionsCount === 1
                     ? 'pronóstico realizado'
                     : 'pronósticos realizados'}.
-                  Los 10 partidos seleccionados
+                  Los partidos seleccionados
                   no pueden modificarse.
                 </p>
 
@@ -617,12 +602,7 @@ export default function TournamentMatchSelector({
                         match.id,
                       );
 
-                    const disabled =
-                      locked ||
-                      (
-                        !selected &&
-                        selectedIds.length >= 10
-                      );
+                    const disabled = locked;
 
                     const matchDate =
                       new Date(
@@ -717,14 +697,14 @@ export default function TournamentMatchSelector({
 
                               {match.league?.name && (
                                 <span className="rounded-full bg-white/5 px-2 py-1 text-xs">
-                                  {match.league.name}
+                                  {leagueNameEs(match.league.name, match.league.country)}
                                 </span>
                               )}
 
                               {match.matchday?.roundName && (
 
                                 <span className="rounded-full bg-white/5 px-2 py-1 text-xs">
-                                  {match.matchday.roundName}
+                                  {roundNameEs(match.matchday.roundName)}
                                 </span>
 
                               )}
@@ -776,13 +756,13 @@ export default function TournamentMatchSelector({
           onClick={handleSave}
           disabled={
             locked ||
-            selectedIds.length !== 10 ||
+            selectedIds.length < 1 ||
             saving
           }
           className={`w-full rounded-2xl px-6 py-5 text-lg font-black shadow-2xl transition ${
             locked
               ? 'cursor-not-allowed bg-amber-500/10 text-amber-400'
-              : selectedIds.length === 10 &&
+              : selectedIds.length > 0 &&
                   !saving
                 ? 'bg-red-600 text-white hover:bg-red-500'
                 : 'cursor-not-allowed bg-white/10 text-slate-500'
@@ -797,13 +777,13 @@ export default function TournamentMatchSelector({
 
               ? 'Guardando selección...'
 
-              : selectedIds.length === 10
+              : selectedIds.length > 0
 
-                ? 'Guardar 10 partidos'
+                ? `Guardar ${selectedIds.length} ${
+                    selectedIds.length === 1 ? 'partido' : 'partidos'
+                  }`
 
-                : `Selecciona ${
-                    10 - selectedIds.length
-                  } partidos más`}
+                : 'Selecciona los partidos'}
 
         </button>
 

@@ -20,14 +20,14 @@ const options = [
     title: "Consulta",
     description: "Inscripciones, pronósticos y funcionamiento.",
     message:
-      "Hola, equipo de GolPro. Tengo una consulta sobre " +
+      "Hola, equipo de Total Gol. Tengo una consulta sobre " +
       "el funcionamiento de la plataforma. ¿Me pueden ayudar?",
   },
   {
     title: "Comprobante de pago",
     description: "Envía el soporte de tu inscripción.",
     message:
-      "Hola, equipo de GolPro. Quiero enviar mi " +
+      "Hola, equipo de Total Gol. Quiero enviar mi " +
       "comprobante de pago para que puedan verificar " +
       "mi inscripción. Adjunto el soporte a continuación.",
   },
@@ -59,7 +59,7 @@ export default function WhatsAppFloatingButton() {
         >
           <div className="border-b border-white/10 px-4 py-4">
             <p className="text-sm font-semibold text-white">
-              Atención GolPro
+              Atención Total Gol
             </p>
             <p className="mt-1 text-xs leading-5 text-slate-400">
               Escríbenos por WhatsApp. Respondemos en horario de atención.

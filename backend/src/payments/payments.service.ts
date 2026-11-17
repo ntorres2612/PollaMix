@@ -266,6 +266,12 @@ export class PaymentsService {
         );
       }
 
+      if (!payment.entryId && dto.status === 'APPROVED') {
+        throw new BadRequestException(
+          'Este pago no tiene un pronóstico. Guarda el pronóstico antes de aprobarlo.',
+        );
+      }
+
       if (payment.status === 'APPROVED') {
         if (dto.status === 'APPROVED') {
           return payment;
@@ -297,6 +303,13 @@ export class PaymentsService {
       });
 
       if (payment.participantId) {
+        const matchCount =
+          dto.status === 'APPROVED'
+            ? await tx.tournamentMatch.count({
+                where: { tournamentId: payment.tournamentId },
+              })
+            : 0;
+
         if (payment.entryId && dto.status === 'APPROVED') {
           const entryPredictions = await tx.prediction.count({
             where: { entryId: payment.entryId },
@@ -306,7 +319,7 @@ export class PaymentsService {
             where: { id: payment.entryId },
             data: {
               paid: true,
-              ...(entryPredictions === 10
+              ...(matchCount > 0 && entryPredictions === matchCount
                 ? { predictionsSubmittedAt: new Date() }
                 : {}),
             },
@@ -331,7 +344,8 @@ export class PaymentsService {
             paid: dto.status === 'APPROVED',
             ...(!payment.entryId &&
             dto.status === 'APPROVED' &&
-            savedPredictions === 10
+            matchCount > 0 &&
+            savedPredictions === matchCount
               ? { predictionsSubmittedAt: new Date() }
               : {}),
           },
